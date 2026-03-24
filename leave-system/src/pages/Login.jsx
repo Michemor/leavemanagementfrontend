@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/authhook';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import { login } from '../services/ApiClient'; 
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa6";
 import { useAlert } from '../hooks/alerthook';
+import { useLoginRedirect } from '../hooks/useLoginRedirect';
 
 
 export default function Login() {
@@ -13,8 +12,7 @@ export default function Login() {
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
-  const { login: authLogin } = useAuth();
+  const { redirectToDashboard } = useLoginRedirect();
   const { showError, showSuccess, showWarning, showInfo } = useAlert();
 
   const handleLogin = (e) => {
@@ -28,25 +26,10 @@ export default function Login() {
     setIsLoading(true);
     login(email, password)
       .then((response) => {
-        // Extract token and user data from response
-        const token = response.token || response.access;
-        // Try to get user object, fallback to entire response if no user object
-        const userData = response.user || response;
-      
-        // Store token in localStorage
-        if (token) {
-          localStorage.setItem('token', token);
-          console.log("Token stored in localStorage");
-        }
-        
-        // Store user in AuthContext
-        if (authLogin && userData) {
-          authLogin(userData, token);
-        }
-        
         showSuccess('Login successful!');
         setIsLoading(false);
-        navigate('/dashboard');
+        // Redirect to the correct dashboard based on user role (admin or staff)
+        redirectToDashboard(response);
       })
       .catch((error) => {
         console.error("Login failed:", error);
