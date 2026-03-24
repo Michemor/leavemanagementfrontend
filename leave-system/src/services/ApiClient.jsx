@@ -1,21 +1,11 @@
-/**
- * Handles backend logic for API calls, authentication, and data fetching.
- * This file serves as a central point for all API interactions, ensuring
- * that the frontend can easily communicate with the backend services.
- *
- * Functions
- */
-
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api/'; // Adjust as needed
+const API_BASE_URL = 'http://localhost:8000/api/';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-    
-
   },
 });
 
@@ -24,11 +14,22 @@ export const apiClient = axios.create({
 // =========================================================
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token && token !== 'undefined' && token !== 'null') {
-      
-      config.headers.Authorization = `Bearer ${token}`; 
-      
+    // Don't add token to login/auth endpoints (they're public)
+    const publicEndpoints = ['/auth/login/', '/auth/password-reset/'];
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
+
+    if (!isPublicEndpoint) {
+      const token = localStorage.getItem('token');
+      if (token && token !== 'undefined' && token !== 'null') {
+        try {
+          // Smart Prefixing (Supports both Standard DRF Tokens and SimpleJWT)
+          const isJWT = token.split('.').length === 3;
+          config.headers.Authorization = `${isJWT ? 'Bearer' : 'Token'} ${token}`;
+        } catch (e) {
+          // Invalid token format, skip
+          console.warn('Invalid token format', e);
+        }
+      }
     }
     return config;
   },
@@ -40,23 +41,39 @@ apiClient.interceptors.request.use(
 // =========================================================
 // 2. RESPONSE INTERCEPTOR (Handles expired/invalid tokens)
 // =========================================================
+let isLoggingOut = false;
+let alertHandler = null;
+
+// Function to register alert handler from a React component
+export const setAlertHandler = (handler) => {
+  alertHandler = handler;
+};
+
 apiClient.interceptors.response.use(
   (response) => {
-
     return response;
   },
   (error) => {
     if (error.response && error.response.status === 401) {
       console.error('Token invalid or expired. Logging out...');
-      
+
+      // Show alert using custom AlertContext if available
+      if (alertHandler) {
+        alertHandler('Your session has expired. Please log in again.');
+      }
+
       localStorage.removeItem('user');
       localStorage.removeItem('token');
-      
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'; 
+
+      if (window.location.pathname !== '/login' && !isLoggingOut) {
+        isLoggingOut = true;
+        window.location.href = '/login';
+        // Return a stalled Promise to prevent components from throwing errors
+        // while the page is redirecting
+        return new Promise(() => { });
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -64,7 +81,7 @@ apiClient.interceptors.response.use(
 export const login = async (email, password) => {
   try {
     const response = await apiClient.post('/auth/login/', { email, password });
-    return response.data; // Return user data and token
+    return response; // Return user data and token
   } catch (error) {
     throw new Error('Login failed. Please check your credentials', { cause: error.message });
   }
@@ -73,7 +90,7 @@ export const login = async (email, password) => {
 export const getLeaveHistory = async () => {
   try {
     const response = await apiClient.get('/leaves/history/');
-    return response.data; // Return leave history data
+    return response; // Return leave history data
   } catch (error) {
     throw new Error('Failed to fetch leave history', { cause: error.message });
   }
@@ -81,8 +98,21 @@ export const getLeaveHistory = async () => {
 
 export const applyLeave = async (leaveData) => {
   try {
-    const response = await apiClient.post('/leaves/apply/', leaveData);
-    return response.data; // Return newly created leave request
+    // Convert camelCase to snake_case for Django API
+    const apiData = new FormData();
+
+    // Convert field names to snake_case
+    apiData.append('leave_type', leaveData.leaveType || leaveData.leave_type);
+    apiData.append('start_date', leaveData.startDate || leaveData.start_date);
+    apiData.append('end_date', leaveData.endDate || leaveData.end_date);
+    apiData.append('reason', leaveData.reason || '');
+
+    if (leaveData.document) {
+      apiData.append('document', leaveData.document);
+    }
+
+    const response = await apiClient.post('/leaves/apply/', apiData);
+    return response;
   } catch (error) {
     throw new Error('Failed to apply for leave', { cause: error.message });
   }
@@ -91,7 +121,7 @@ export const applyLeave = async (leaveData) => {
 export const getAllLeaves = async () => {
   try {
     const response = await apiClient.get('/leaves/all');
-    return response.data; // Return all leave data
+    return response; // Return all leave data
   } catch (error) {
     throw new Error('Failed to fetch all leaves', { cause: error.message });
   }
@@ -101,7 +131,7 @@ export const getAllLeaves = async () => {
 export const updateLeaveData = async (leaveId, leaveData) => {
   try {
     const response = await apiClient.patch(`/leaves/${leaveId}/`, leaveData);
-    return response.data;
+    return response;
   } catch (error) {
     throw new Error('Failed to update leave data', { cause: error.message });
   }
@@ -109,8 +139,8 @@ export const updateLeaveData = async (leaveId, leaveData) => {
 
 export const createEmployee = async (employeeData) => {
   try {
-    const response = await apiClient.post('/auth/register/', employeeData);
-    return response.data;
+    const response = await apiClient.post('/employee/create/', employeeData);
+    return response;
   } catch (error) {
     throw new Error('Failed to create employee', { cause: error.message });
   }
@@ -119,7 +149,7 @@ export const createEmployee = async (employeeData) => {
 export const getPendingLeaves = async () => {
   try {
     const response = await apiClient.get('/leaves/pending/');
-    return response.data; 
+    return response;
   } catch (error) {
     throw new Error('Failed to fetch pending leaves', { cause: error.message });
   }
@@ -128,8 +158,122 @@ export const getPendingLeaves = async () => {
 export const getStatistics = async () => {
   try {
     const response = await apiClient.get('/leaves/statistics/');
-    return response.data;
+    return response;
   } catch (error) {
     throw new Error('Failed to fetch statistics', { cause: error.message });
+  }
+};
+
+export const passwordResetRequest = async (email) => {
+  try {
+    const response = await apiClient.post('/auth/password-reset/confirm/', { email });
+    return response;
+  } catch (error) {
+    throw new Error('Failed to send password reset email', { cause: error.message });
+  }
+};
+
+// =========================================================
+// LEAVE POLICY MANAGEMENT APIs
+// =========================================================
+export const getLeavePolices = async () => {
+  try {
+    const response = await apiClient.get('/leave-policies/');
+    return response;
+  } catch (error) {
+    throw new Error('Failed to fetch leave policies', { cause: error.message });
+  }
+};
+
+export const getLeavePolicy = async (policyId) => {
+  try {
+    const response = await apiClient.get(`/leave-policies/${policyId}/`);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to fetch leave policy', { cause: error.message });
+  }
+};
+
+export const createLeavePolicy = async (policyData) => {
+  try {
+    const response = await apiClient.post('/leave-policies/create/', policyData);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to create leave policy', { cause: error.message });
+  }
+};
+
+export const updateLeavePolicy = async (policyId, policyData) => {
+  try {
+    const response = await apiClient.patch(`/leave-policies/${policyId}/update/`, policyData);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to update leave policy', { cause: error.message });
+  }
+};
+
+export const deleteLeavePolicy = async (policyId) => {
+  try {
+    const response = await apiClient.delete(`/leave-policies/${policyId}/delete/`);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to delete leave policy', { cause: error.message });
+  }
+};
+
+// =========================================================
+// EMPLOYEE MANAGEMENT APIs
+// =========================================================
+export const getAllEmployees = async () => {
+  try {
+    const response = await apiClient.get('/employee/list/');
+    return response;
+  } catch (error) {
+    throw new Error('Failed to fetch employees', { cause: error.message });
+  }
+};
+
+export const getEmployee = async (employeeId) => {
+  try {
+    const response = await apiClient.get(`/employee/${employeeId}/`);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to fetch employee', { cause: error.message });
+  }
+};
+
+export const createEmployeeRecord = async (employeeData) => {
+  try {
+    const response = await apiClient.post('/employee/create/', employeeData);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to create employee', { cause: error.message });
+  }
+};
+
+export const updateEmployee = async (employeeId, employeeData) => {
+  try {
+    const response = await apiClient.post(`/employee/${employeeId}/`, employeeData);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to update employee', { cause: error.message });
+  }
+};
+
+export const deleteEmployee = async (employeeId) => {
+  try {
+    const response = await apiClient.delete(`/employee/${employeeId}/delete/`);
+    return response;
+  } catch (error) {
+    throw new Error('Failed to delete employee', { cause: error.message });
+  }
+};
+
+export const listEmployees = async () => {
+  try {
+    const response = await apiClient.get('/employee/list/');
+    return response;
+  } catch (error) {
+    throw new Error('Failed to list employees', { cause: error.message });
   }
 };

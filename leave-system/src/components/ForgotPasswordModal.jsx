@@ -1,20 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { passwordResetRequest } from '../services/ApiClient';
+import { useAlert } from '../hooks/alerthook';
 
-export default function ForgotPasswordModal({ isOpen, onClose }) {
+export default function ForgotPasswordModal({ isOpen, onClose, userEmail }) {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setEmail(userEmail || '');
+    }
+  }, [isOpen, userEmail]);
+  const { showSuccess, showError, showInfo } = useAlert();
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Password reset requested for:");
-    setSubmitted(true);
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setSubmitted(false);
-      setEmail('');
-      onClose();
-    }, 3000);
+    showInfo('Sending password reset email...');
+    passwordResetRequest(email)
+      .then(() => {
+        showSuccess('Password reset email sent successfully!');
+        setSubmitted(true);
+        // Reset form after 3 seconds
+        setTimeout(() => {
+          setSubmitted(false);
+          setEmail('');
+          onClose();
+        }, 3000);
+      })
+      .catch((error) => {
+        console.error('Error sending password reset email:', error);
+        showError(error.message || 'Failed to send password reset email. Please try again.');
+      });
   };
 
   const handleClose = () => {
@@ -29,7 +45,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }) {
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40 transition-opacity"
+        className="fixed inset-0 backdrop-blur-sm z-40 transition-opacity"
         onClick={handleClose}
       ></div>
 

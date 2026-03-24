@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SideBar from './SideBar';
 import { useAuth } from '../hooks/authhook';
+import { useAlert } from '../hooks/alerthook';
+import { setAlertHandler } from '../services/ApiClient';
 import { GiHamburgerMenu } from 'react-icons/gi';
 
 /**
@@ -16,7 +18,13 @@ export default function ProtectedLayout({ children, title, subtitle, action }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const { showError } = useAlert();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Register alert handler with ApiClient for token expiration alerts
+  useEffect(() => {
+    setAlertHandler(showError);
+  }, [showError]);
 
   const handleLogout = () => {
     logout();

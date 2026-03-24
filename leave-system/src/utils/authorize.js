@@ -10,9 +10,11 @@ export const getUserRole = (user) => {
     const normalizedRole = user.employee_role ? user.employee_role.toLowerCase() : '';
 
     if (
-        normalizedRole === 'hr' ||
-        normalizedRole === 'manager' ||
-        user.is_superuser === true
+        normalizedRole.includes('hr') ||
+        normalizedRole.includes('manager') ||
+        user.is_superuser === true ||
+        user.is_admin === true ||
+        user.isAdmin === true
     ) {
         return 'admin';
     }

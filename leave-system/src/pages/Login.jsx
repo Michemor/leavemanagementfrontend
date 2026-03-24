@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/authhook';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
-import { login } from '../services/ApiClient'; 
+import { login } from '../services/ApiClient';
 import { FaRegEye, FaRegEyeSlash } from "react-icons/fa6";
 import { useAlert } from '../hooks/alerthook';
+import { getCorrectDashboardPath } from '../utils/authorize';
 
 
 export default function Login() {
@@ -28,30 +29,39 @@ export default function Login() {
     setIsLoading(true);
     login(email, password)
       .then((response) => {
+        showSuccess(JSON.stringify(response));
         // Extract token and user data from response
-        const token = response.token || response.access;
+        const token = response.data.token || response.data.access;
         // Try to get user object, fallback to entire response if no user object
-        const userData = response.user || response;
-      
+        const userData = response.data.user || response.data;
+
         // Store token in localStorage
         if (token) {
           localStorage.setItem('token', token);
-          console.log("Token stored in localStorage");
         }
-        
+
         // Store user in AuthContext
         if (authLogin && userData) {
           authLogin(userData, token);
         }
-        
-        showSuccess('Login successful!');
+
+        showSuccess(response.data.message);
         setIsLoading(false);
-        navigate('/dashboard');
+        // Redirect to the correct dashboard based on user role
+        navigate(getCorrectDashboardPath(userData));
+
       })
       .catch((error) => {
-        console.error("Login failed:", error);
+        const message = error?.message || 'An unexpected error occurred during login. Please try again later.';
+        if (message) {
+          showError(message);
+        } else {
+          showError('An unexpected error occurred during login. Please try again later.');
+        }
+        // Clear sensitive information on failed login
+        setPassword('');
+        setEmail('');
         setIsLoading(false);
-        showError(error.message || "Login failed. Please try again.");
       });
   };
 
@@ -100,10 +110,10 @@ export default function Login() {
               </div>
               {/**sign in button to lead to the dashboard**/}
 
-              <button 
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
                 {isLoading ? 'Signing In...' : 'Sign In'} {!isLoading && <span className="text-xl">→</span>}
               </button>
             </form>
@@ -117,16 +127,17 @@ export default function Login() {
                 Forgot password?
               </button>
             </div>
-                                  
-    
+
+
           </div>
         </div>
       </div>
 
       {/* Forgot Password Modal */}
-      <ForgotPasswordModal 
-        isOpen={isForgotPasswordOpen} 
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
         onClose={() => setIsForgotPasswordOpen(false)}
+        userEmail={email}
       />
     </div>
   );

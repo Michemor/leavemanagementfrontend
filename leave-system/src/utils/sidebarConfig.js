@@ -53,6 +53,20 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/add-employee',
         allowedRoles: ['admin'],
         description: 'Create a new employee account'
+    },
+    {
+        id: 'admin-leaves',
+        label: 'Leaves',
+        path: '/admin/manage/leaves',
+        allowedRoles: ['admin'],
+        description: 'Manage leave types and settings'
+    },
+    {
+        id: 'admin-employee-management',
+        label: 'Employee Management',
+        path: '/admin/manage/employees',
+        allowedRoles: ['admin'],
+        description: 'Manage employee accounts and roles'
     }
 
 ];

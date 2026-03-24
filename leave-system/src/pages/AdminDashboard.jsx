@@ -20,7 +20,7 @@ export default function Dashboard() {
     const getGreeting = () => {
         const now = new Date();
         const hour = now.getHours();
-        
+
         if (hour < 12) return 'Good Morning';
         if (hour < 18) return 'Good Afternoon';
         return 'Good Evening';
@@ -105,29 +105,29 @@ export default function Dashboard() {
                         <tbody>
                             {leaveRequests && leaveRequests.length > 0 ? (
                                 leaveRequests.slice(0, 5).map((request) => {
-                                  // Add safety check for request object
-                                  if (!request || !request.id) return null;
-                                  return (
-                                    <tr key={request.id} className="border-t border-slate-200 hover:bg-slate-50">
-                                        <td className="px-4 md:px-6 py-4 text-sm font-medium text-slate-900">
-                                            {formatLeaveType(request.leave_type || request.type)}
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 text-sm text-slate-600">
-                                            {request.start_date ? formatDate(request.start_date) : 'N/A'}
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 text-sm text-slate-600">
-                                            {request.end_date ? formatDate(request.end_date) : 'N/A'}
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 text-sm">
-                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.status || 'pending')}`}>
-                                                {request.status || 'Pending'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 md:px-6 py-4 text-sm text-slate-600 max-w-xs truncate">
-                                            {request.admin_remarks || '-'}
-                                        </td>
-                                    </tr>
-                                  );
+                                    // Add safety check for request object
+                                    if (!request || !request.id) return null;
+                                    return (
+                                        <tr key={request.id} className="border-t border-slate-200 hover:bg-slate-50">
+                                            <td className="px-4 md:px-6 py-4 text-sm font-medium text-slate-900">
+                                                {formatLeaveType(request.leave_type || request.type)}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-sm text-slate-600">
+                                                {request.start_date ? formatDate(request.start_date) : 'N/A'}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-sm text-slate-600">
+                                                {request.end_date ? formatDate(request.end_date) : 'N/A'}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-sm">
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.status || 'pending')}`}>
+                                                    {request.status || 'Pending'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-sm text-slate-600 max-w-xs truncate">
+                                                {request.admin_remarks || '-'}
+                                            </td>
+                                        </tr>
+                                    );
                                 })
                             ) : (
                                 <tr>
@@ -142,8 +142,8 @@ export default function Dashboard() {
             </div>
 
             {/* Apply Leave Modal */}
-            <ApplyLeaveModal 
-                isOpen={isModalOpen} 
+            <ApplyLeaveModal
+                isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={() => {
                     setIsModalOpen(false);
@@ -211,23 +211,23 @@ const LEAVE_NAME_TO_CODE = Object.entries(LEAVE_TYPE_LABELS).reduce((acc, [code,
 
 const formatLeaveType = (input) => {
     if (!input) return 'Unknown Leave';
-    
+
     // If it's already a code, use directly
     if (LEAVE_TYPE_LABELS[input]) {
         return LEAVE_TYPE_LABELS[input];
     }
-    
+
     // If it's a full name, check if we have it mapped
     if (LEAVE_NAME_TO_CODE[input]) {
         return LEAVE_TYPE_LABELS[LEAVE_NAME_TO_CODE[input]];
     }
-    
+
     // Try uppercase version
     const upper = String(input).toUpperCase();
     if (LEAVE_TYPE_LABELS[upper]) {
         return LEAVE_TYPE_LABELS[upper];
     }
-    
+
     // Return as-is if already formatted
     return input;
 };

@@ -1,54 +1,51 @@
 import { AlertContext } from "../hooks/alerthook";
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { AlertBanner } from "../components/AlertBanner";
 
 // AlertProvider component
 export const AlertProvider = ({ children }) => {
-    const [alert, setAlert] = useState({
-        message: '',
-        type: 'info',
-        duration: 5000,
-        autoClose: true,
-});
+    const [alert, setAlert] = useState(null);
 
-    const showAlert = (message, type = 'info', duration = 5000) => {
+    const showAlert = useCallback((message, type = 'info', duration = 5000) => {
         setAlert({ message, type, duration });
-    };
+    }, []);
 
-    const showSuccess = (message, duration = 5000) => {
+    const showSuccess = useCallback((message, duration = 5000) => {
         showAlert(message, 'success', duration);
-    };
+    }, [showAlert]);
 
-    const showError = (message, duration = 5000) => {
+    const showError = useCallback((message, duration = 5000) => {
         showAlert(message, 'error', duration);
-    };
+    }, [showAlert]);
 
-    const showWarning = (message, duration = 5000) => {
+    const showWarning = useCallback((message, duration = 5000) => {
         showAlert(message, 'warning', duration);
-    };
+    }, [showAlert]);
 
-    const showInfo = (message, duration = 5000) => {
+    const showInfo = useCallback((message, duration = 5000) => {
         showAlert(message, 'info', duration);
-    };
+    }, [showAlert]);
 
-    const showLoading = (message) => {
+    const showLoading = useCallback((message) => {
         showAlert(message, 'loading', 0);
-    };
+    }, [showAlert]);
 
-    const hideAlert = () => {
+    const hideAlert = useCallback(() => {
         setAlert(null);
-    };
+    }, []);
+
+    const contextValue = useMemo(() => ({
+        showAlert,
+        showSuccess,
+        showError,
+        showWarning,
+        showInfo,
+        showLoading,
+        hideAlert,
+    }), [showAlert, showSuccess, showError, showWarning, showInfo, showLoading, hideAlert]);
 
     return (
-        <AlertContext.Provider value={{
-            showAlert,
-            showSuccess,
-            showError,
-            showWarning,
-            showInfo,
-            showLoading,
-            hideAlert,
-        }}>
+        <AlertContext.Provider value={contextValue}>
             {children}
             {alert && (
                 <AlertBanner

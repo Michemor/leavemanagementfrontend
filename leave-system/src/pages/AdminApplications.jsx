@@ -9,9 +9,6 @@ export default function AdminApplications() {
   const { showSuccess, showError, showWarning } = useAlert();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [editingRowId, setEditingRowId] = useState(null);
-  const [editingData, setEditingData] = useState({});
 
   // Format leave type
   const formatLeaveType = (leaveType) => {
@@ -31,7 +28,7 @@ export default function AdminApplications() {
       const data = await getPendingLeaves();
       // Handle both array and nested object responses
       const leaveData = Array.isArray(data) ? data : data.results || [];
-      
+
       // Transform API response to component format
       const transformedData = leaveData.map((item) => {
         const employee = item.employee || {};
@@ -41,7 +38,6 @@ export default function AdminApplications() {
           employeeId: employee.id || 'N/A',
           employeeDepartment: employee.department || 'N/A',
           employeeEmail: employee.email || 'N/A',
-          status: item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Pending',
           type: formatLeaveType(item.leave_type),
           start: item.start_date || 'N/A',
           end: item.end_date || 'N/A',
@@ -50,7 +46,7 @@ export default function AdminApplications() {
           leave_type: item.leave_type,
         };
       });
-      
+
       setApplications(transformedData);
     } catch (error) {
       console.error('Error fetching pending applications:', error);
@@ -77,71 +73,7 @@ export default function AdminApplications() {
     }
   };
 
-  // Handle cell edit start
-  const handleEditStart = (app) => {
-    setEditingRowId(app.id);
-    setEditingData({
-      status: app.status.toUpperCase(),
-      reason: app.reason,
-      start: app.start,
-      end: app.end,
-    });
-  };
 
-  // Handle cell value change
-  const handleCellChange = (field, value) => {
-    setEditingData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  // Handle save edited data
-  const handleSaveRow = async (app) => {
-    if (!editingData.status) {
-      showWarning('Status is required');
-      return;
-    }
-
-    // set status to uppercase for API
-    editingData.status = editingData.status.toUpperCase();
-
-    setIsProcessing(true);
-    try {
-      // Update the status via API
-      await updateLeaveData(app.id, editingData);
-      
-      // Update local state
-      setApplications((prev) =>
-        prev.map((item) =>
-          item.id === app.id
-            ? {
-                ...item,
-                status: editingData.status.charAt(0).toUpperCase() + editingData.status.slice(1),
-                reason: editingData.reason,
-                start: editingData.start,
-                end: editingData.end,
-              }
-            : item
-        )
-      );
-
-      showSuccess(`Leave application updated successfully!`);
-      setEditingRowId(null);
-      setEditingData({});
-    } catch (error) {
-      console.error('Error updating application:', error);
-      showError('Failed to update application. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Handle cancel edit
-  const handleCancelEdit = () => {
-    setEditingRowId(null);
-    setEditingData({});
-  };
 
   return (
     <ProtectedLayout currentPath={location.pathname}>
@@ -222,130 +154,26 @@ export default function AdminApplications() {
                       <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Duration</th>
                       <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Start Date</th>
                       <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">End Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Reason</th>
                       <th className="px-6 py-4 text-center text-sm font-bold text-slate-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {applications.map((app) => {
-                      const isEditing = editingRowId === app.id;
-                      return (
-                        <tr
-                          key={app.id}
-                          className={`border-b border-slate-200 hover:bg-slate-50 transition ${
-                            isEditing ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="font-semibold text-slate-900">{app.employeeName}</p>
-                              <p className="text-xs text-slate-500">{app.employeeId}</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-slate-700">{app.employeeDepartment}</td>
-                          <td className="px-6 py-4 text-slate-700">{app.type}</td>
-                          <td className="px-6 py-4 text-slate-700">{calculateDays(app.start, app.end)}</td>
-                          <td className="px-6 py-4">
-                            {isEditing ? (
-                              <input
-                                type="date"
-                                value={editingData.start}
-                                onChange={(e) => handleCellChange('start', e.target.value)}
-                                disabled={isProcessing}
-                                className="px-3 py-1 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                              />
-                            ) : (
-                              <span className="text-slate-700">{app.start}</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {isEditing ? (
-                              <input
-                                type="date"
-                                value={editingData.end}
-                                onChange={(e) => handleCellChange('end', e.target.value)}
-                                disabled={isProcessing}
-                                className="px-3 py-1 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                              />
-                            ) : (
-                              <span className="text-slate-700">{app.end}</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {isEditing ? (
-                              <select
-                                value={editingData.status}
-                                onChange={(e) => handleCellChange('status', e.target.value)}
-                                disabled={isProcessing}
-                                className="px-3 py-1 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
-                              </select>
-                            ) : (
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                  app.status === 'Approved'
-                                    ? 'bg-green-100 text-green-700'
-                                    : app.status === 'Pending'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-red-100 text-red-700'
-                                }`}
-                              >
-                                {app.status}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {isEditing ? (
-                              <textarea
-                                value={editingData.reason}
-                                onChange={(e) => handleCellChange('reason', e.target.value)}
-                                disabled={isProcessing}
-                                className="w-full px-3 py-1 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
-                                rows="2"
-                              />
-                            ) : (
-                              <p className="text-slate-700 text-sm truncate max-w-xs" title={app.reason}>
-                                {app.reason}
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2 justify-center">
-                              {isEditing ? (
-                                <>
-                                  <button
-                                    onClick={() => handleSaveRow(app)}
-                                    disabled={isProcessing}
-                                    className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded transition disabled:opacity-50"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={handleCancelEdit}
-                                    disabled={isProcessing}
-                                    className="px-3 py-1 bg-slate-400 hover:bg-slate-500 text-white text-xs font-semibold rounded transition disabled:opacity-50"
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleEditStart(app)}
-                                  disabled={isProcessing}
-                                  className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition disabled:opacity-50"
-                                >
-                                  Edit
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {applications.map((app) => (
+                      <ApplicationRow
+                        key={app.id}
+                        app={app}
+                        onUpdateSuccess={(updatedApp) => {
+                          setApplications((prev) =>
+                            prev.map((item) => (item.id === updatedApp.id ? updatedApp : item))
+                          );
+                        }}
+                        calculateDays={calculateDays}
+                        showWarning={showWarning}
+                        showSuccess={showSuccess}
+                        showError={showError}
+                      />
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -354,5 +182,83 @@ export default function AdminApplications() {
         </div>
       </div>
     </ProtectedLayout>
+  );
+}
+
+// Extracted ApplicationRow component to isolate edit state and prevent massive re-renders
+function ApplicationRow({ app, onUpdateSuccess, calculateDays, showWarning, showSuccess, showError }) {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Handle approve action
+  const handleApprove = async () => {
+    setIsProcessing(true);
+    try {
+      await updateLeaveData(app.id, { status: 'APPROVED' });
+      onUpdateSuccess({ ...app, status: 'Approved' });
+      showSuccess('Leave application approved successfully!');
+    } catch (error) {
+      console.error('Error approving application:', error);
+      showError('Failed to approve application. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle reject action
+  const handleReject = async () => {
+    setIsProcessing(true);
+    try {
+      await updateLeaveData(app.id, { status: 'REJECTED' });
+      onUpdateSuccess({ ...app, status: 'Rejected' });
+      showSuccess('Leave application rejected successfully!');
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      showError('Failed to reject application. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <tr className="border-b border-slate-200 hover:bg-slate-50 transition">
+      <td className="px-6 py-4">
+        <div>
+          <p className="font-semibold text-slate-900">{app.employeeName}</p>
+          <p className="text-xs text-slate-500">{app.employeeId}</p>
+        </div>
+      </td>
+      <td className="px-6 py-4 text-slate-700">{app.employeeDepartment}</td>
+      <td className="px-6 py-4 text-slate-700">{app.type}</td>
+      <td className="px-6 py-4 text-slate-700">{calculateDays(app.start, app.end)}</td>
+      <td className="px-6 py-4">
+        <span className="text-slate-700">{app.start}</span>
+      </td>
+      <td className="px-6 py-4">
+        <span className="text-slate-700">{app.end}</span>
+      </td>
+      <td className="px-6 py-4">
+        <p className="text-slate-700 text-sm truncate max-w-xs" title={app.reason}>
+          {app.reason}
+        </p>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={handleApprove}
+            disabled={isProcessing}
+            className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded transition disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            onClick={handleReject}
+            disabled={isProcessing}
+            className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded transition disabled:opacity-50"
+          >
+            Reject
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }

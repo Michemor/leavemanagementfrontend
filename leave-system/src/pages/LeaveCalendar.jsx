@@ -84,7 +84,7 @@ export default function LeaveCalendar() {
   };
 
   const getLeaveColor = (status) => {
-    const statusLower = String(status).toLowerCase();
+    const statusLower = String(status || 'pending').toLowerCase();
     if (statusLower === 'approved') return 'bg-green-100 border-green-400';
     if (statusLower === 'rejected') return 'bg-red-100 border-red-400';
     if (statusLower === 'pending') return 'bg-yellow-100 border-yellow-400';
@@ -92,7 +92,7 @@ export default function LeaveCalendar() {
   };
 
   const getLeaveStatusBadgeColor = (status) => {
-    const statusLower = String(status).toLowerCase();
+    const statusLower = String(status || 'pending').toLowerCase();
     if (statusLower === 'approved') return 'bg-green-500';
     if (statusLower === 'rejected') return 'bg-red-500';
     if (statusLower === 'pending') return 'bg-yellow-500';
@@ -153,7 +153,7 @@ export default function LeaveCalendar() {
           {days.map((day, index) => {
             const hasLeave = day && hasLeaveOnDate(day);
             const leaveData = day && getLeaveOnDate(day);
-            const bgColor = hasLeave ? getLeaveColor(leaveData.status) : 'bg-white border-slate-200';
+            const bgColor = hasLeave && leaveData ? getLeaveColor(leaveData.status) : 'bg-white border-slate-200';
             
             return (
               <div
@@ -163,12 +163,12 @@ export default function LeaveCalendar() {
                     ? 'bg-slate-50 border-transparent'
                     : bgColor
                 }`}
-                title={hasLeave ? `${leaveData.type} (${leaveData.status})` : ''}
+                title={hasLeave && leaveData ? `${leaveData.type} (${leaveData.status || 'pending'})` : ''}
               >
                 {day && (
                   <>
                     <div className="font-bold text-slate-900">{day}</div>
-                    {hasLeave && (
+                    {hasLeave && leaveData && (
                       <div className={`mt-1 text-xs ${getLeaveStatusBadgeColor(leaveData.status)} text-white px-1 py-0.5 rounded truncate`}>
                         {leaveData.type}
                       </div>
@@ -201,12 +201,14 @@ export default function LeaveCalendar() {
           <h3 className="font-bold text-slate-900 mb-3">Your Leave Events</h3>
           <div className="space-y-2">
             {leaveEvents.length > 0 ? (
-              leaveEvents.map((event, idx) => (
+              leaveEvents.map((event, idx) => {
+                const safeStatus = event.status || 'pending';
+                return (
                 <div key={idx} className="flex items-start gap-3 text-sm p-2 bg-slate-50 rounded">
-                  <div className={`w-3 h-3 mt-1 rounded flex-shrink-0 ${getLeaveStatusBadgeColor(event.status)}`}></div>
+                  <div className={`w-3 h-3 mt-1 rounded flex-shrink-0 ${getLeaveStatusBadgeColor(safeStatus)}`}></div>
                   <div className="flex-1">
                     <div className="font-medium text-slate-900">
-                      {event.type} - {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                      {event.type} - {safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1)}
                     </div>
                     <div className="text-xs text-slate-600">
                       {formatDateRange(event.date, event.endDate)}
@@ -214,7 +216,8 @@ export default function LeaveCalendar() {
                     {event.title && <div className="text-xs text-slate-600 mt-1">{event.title}</div>}
                   </div>
                 </div>
-              ))
+              );
+              })
             ) : (
               <p className="text-slate-600 text-sm">No leave events scheduled</p>
             )}
