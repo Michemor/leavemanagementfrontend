@@ -176,6 +176,11 @@ export const applyLeave = async (leaveData) => {
     const response = await apiClient.post('/leaves/', payload);
     return response;
   } catch (error) {
+    console.error('Leave application error response:', error.response?.data);
+    console.error('Leave application error status:', error.response?.status);
+    console.error('Leave application error headers:', error.response?.headers);
+    console.error('Request config:', error.config);
+    console.error('Full error details:', error);
     throw new Error('Failed to apply for leave', { cause: error.message });
   }
 };

@@ -21,6 +21,34 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
 
   const { showSuccess, showError, showWarning } = useAlert();
 
+  // Helper: Check if leave type requires document
+  const requiresDocument = (leaveTypeName) => {
+    const name = (leaveTypeName || '').toLowerCase();
+    return name.includes('sick') || name.includes('study');
+  };
+
+  // Helper: Check if leave type is available (Special Leave only in June)
+  const isLeaveTypeAvailable = (leaveTypeName) => {
+    const name = (leaveTypeName || '').toLowerCase();
+    if (name.includes('special')) {
+      const currentMonth = new Date().getMonth() + 1; // 1-12
+      return currentMonth === 6; // June only
+    }
+    return true; // All other types always available
+  };
+
+  // Helper: Get document label for leave type
+  const getDocumentLabel = (leaveTypeName) => {
+    const name = (leaveTypeName || '').toLowerCase();
+    if (name.includes('sick')) {
+      return 'Medical Certificate';
+    }
+    if (name.includes('study')) {
+      return 'Supporting Document';
+    }
+    return 'Document';
+  };
+
   // Get today's date in YYYY-MM-DD format for min date validation
   const getTodayDate = () => {
     const today = new Date();
@@ -54,6 +82,9 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
         
         // Set initial max days and ID for first policy
         if (policiesArray.length > 0) {
+          setLeavePolicies(policiesArray);
+          
+          // Set initial max days and ID for first policy
           const initialPolicy = policiesArray[0];
           setSelectedTypeMaxDays(initialPolicy.max_days);
           setFormData(prev => ({
@@ -61,10 +92,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
             leaveTypeId: initialPolicy.id,
             leaveTypeName: initialPolicy.name,
           }));
+        } else {
+          throw new Error('API returned empty policies list');
         }
       } catch (error) {
-        console.error('Error fetching leave policies:', error);
-        showWarning('Could not load leave policies. Please try again.');
+        console.error('Error fetching leave policies from API:', error);
+        setLeavePolicies([]);
+        showError('Failed to load leave types. Please refresh the page or contact support.');
       } finally {
         setIsLoadingPolicies(false);
       }
@@ -138,10 +172,19 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       return;
     }
 
-    // Check if document is required for sick or study leave
+    // Check if Special Leave is only available in June
     const leaveTypeName = formData.leaveTypeName || '';
-    if ((leaveTypeName.toLowerCase().includes('sick') || leaveTypeName.toLowerCase().includes('study')) && !formData.document) {
-      showWarning('Please upload a document for ' + leaveTypeName);
+    if (leaveTypeName.toLowerCase().includes('special')) {
+      const currentMonth = new Date().getMonth() + 1;
+      if (currentMonth !== 6) {
+        showError('Special Leave is only available during the month of June.');
+        return;
+      }
+    }
+
+    // Check if document is required for sick or study leave
+    if (requiresDocument(leaveTypeName) && !formData.document) {
+      showWarning(`Please upload a ${getDocumentLabel(leaveTypeName).toLowerCase()} for ${leaveTypeName}`);
       return;
     }
 
@@ -158,7 +201,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       };
 
       await applyLeave(submissionData);
-      showSuccess('Leave request submitted successfully!');
+      showSuccess('Leave request submitted for review! The administrator or HR will review your request shortly.');
 
       // Reset form to first policy
       const firstType = leaveTypes[0];
@@ -218,21 +261,56 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       ></div>
 
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border border-slate-200 max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+        <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-8 border border-slate-200 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
 
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+            className="absolute top-3 sm:top-4 right-3 sm:right-4 text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-100 rounded-lg"
+            title="Close"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
 
-          <h3 className="text-2xl font-black text-slate-900 mb-2">Request Leave</h3>
-          <p className="text-slate-500 text-sm mb-6">Fill in your leave request details</p>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-1 sm:mb-2 pr-8">Request Leave</h3>
+          <p className="text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6">Fill in your leave request details</p>
+
+          {/* Required Fields Info */}
+          <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs sm:text-sm font-semibold text-blue-900 mb-2">Required Information:</p>
+            <ul className="space-y-1.5 text-xs sm:text-sm text-blue-800">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold mt-0.5">•</span>
+                <span>Leave type</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold mt-0.5">•</span>
+                <span>Start date</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold mt-0.5">•</span>
+                <span>End date</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold mt-0.5">•</span>
+                <span>Reason for leave</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold mt-0.5">•</span>
+                <span>Supporting document (where required)</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Review Process Info */}
+          <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs sm:text-sm text-green-800">
+              <span className="font-semibold">📋 Note:</span> After submission, your leave request will be sent to the administrator or HR for review.
+            </p>
+          </div>
 
           {isLoadingPolicies ? (
             <div className="flex items-center justify-center py-8">
@@ -258,14 +336,14 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
               </svg>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Leave Type</label>
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">Leave Type</label>
                 <select
                   name="leaveType"
                   value={formData.leaveTypeId || ''}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition-all"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-black outline-none transition-all text-sm sm:text-base"
                   required
                 >
                   <option value="">Select a leave type</option>
@@ -280,28 +358,28 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Start Date</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">Start Date</label>
                   <input
                     type="date"
                     name="startDate"
                     value={formData.startDate}
                     onChange={handleChange}
                     min={getTodayDate()}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition-all"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-black outline-none transition-all text-sm sm:text-base"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">End Date</label>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">End Date</label>
                   <input
                     type="date"
                     name="endDate"
                     value={formData.endDate}
                     onChange={handleChange}
                     min={getTodayDate()}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition-all"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-black outline-none transition-all text-sm sm:text-base"
                     required
                   />
                 </div>
@@ -309,12 +387,12 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
 
               {/* Days Summary */}
               {daysRequested > 0 && (
-                <div className={`p-3 rounded-lg border-2 ${
+                <div className={`p-2 sm:p-3 rounded-lg border-2 ${
                   exceedsLimit
                     ? 'bg-red-50 border-red-200'
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <p className={`text-sm font-semibold ${exceedsLimit ? 'text-red-700' : 'text-blue-700'}`}>
+                  <p className={`text-xs sm:text-sm font-semibold ${exceedsLimit ? 'text-red-700' : 'text-blue-700'}`}>
                     {daysRequested} day{daysRequested !== 1 ? 's' : ''} requested
                   </p>
                   {exceedsLimit && selectedTypeMaxDays && (
@@ -331,23 +409,23 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
               )}
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Reason</label>
+                <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">Reason</label>
                 <textarea
                   name="reason"
                   value={formData.reason}
                   onChange={handleChange}
                   rows="4"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition-all resize-none"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-black outline-none transition-all resize-none text-sm sm:text-base"
                   placeholder="Provide details about your leave request..."
                   required
                 ></textarea>
               </div>
 
               {/* Document Upload - Only for Sick Leave and Study Leave */}
-              {(formData.leaveTypeName.toLowerCase().includes('sick') || formData.leaveTypeName.toLowerCase().includes('study')) && (
+              {requiresDocument(formData.leaveTypeName) && (
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    {formData.leaveTypeName.toLowerCase().includes('sick') ? 'Medical Certificate' : 'Supporting Document'}
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-700 mb-2">
+                    {getDocumentLabel(formData.leaveTypeName)}
                     <span className="text-red-500 ml-1">*</span>
                   </label>
                   <input
@@ -355,7 +433,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
                     name="document"
                     onChange={handleChange}
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black outline-none transition-all"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-black outline-none transition-all text-sm"
                     required
                   />
                   <p className="text-xs text-slate-500 mt-2">
@@ -372,7 +450,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
               <button
                 type="submit"
                 disabled={exceedsLimit || isLoadingPolicies || isSubmitting}
-                className="w-full bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-lg"
+                className="w-full bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg sm:rounded-xl transition-all shadow-lg text-sm sm:text-base min-h-[44px] flex items-center justify-center"
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -380,7 +458,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 rounded-xl transition-all"
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 rounded-lg sm:rounded-xl transition-all text-sm sm:text-base min-h-[44px] flex items-center justify-center"
               >
                 Cancel
               </button>
