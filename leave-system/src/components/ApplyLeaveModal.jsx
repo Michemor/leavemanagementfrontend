@@ -4,7 +4,6 @@ import { applyLeave, getLeaveTypes } from '../services/ApiClient';
 
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
   const [formData, setFormData] = useState({
-    leaveTypeId: null,
     leaveTypeName: '',
     startDate: '',
     endDate: '',
@@ -26,16 +25,6 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
   const requiresDocument = (leaveTypeName) => {
     const name = (leaveTypeName || '').toLowerCase();
     return name.includes('sick') || name.includes('study');
-  };
-
-  // Helper: Check if leave type is available (Special Leave only in June)
-  const isLeaveTypeAvailable = (leaveTypeName) => {
-    const name = (leaveTypeName || '').toLowerCase();
-    if (name.includes('special')) {
-      const currentMonth = new Date().getMonth() + 1; // 1-12
-      return currentMonth === 6; // June only
-    }
-    return true; // All other types always available
   };
 
   // Helper: Get document label for leave type
@@ -83,7 +72,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
         
         // Set initial max days and ID for first policy
         if (policiesArray.length > 0) {
-          setLeavePolicies(policiesArray);
+          setLeaveTypes(policiesArray);
           
           // Set initial max days and ID for first policy
           const initialPolicy = policiesArray[0];
@@ -98,7 +87,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
         }
       } catch (error) {
         console.error('Error fetching leave policies from API:', error);
-        setLeavePolicies([]);
+        setLeaveTypes([]);
         showError('Failed to load leave types. Please refresh the page or contact support.');
       } finally {
         setIsLoadingPolicies(false);
@@ -108,7 +97,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
     if (isOpen) {
       fetchPolicies();
     }
-  }, [isOpen, showWarning]);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
@@ -203,6 +192,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       };
 
       await applyLeave(submissionData);
+      console.log('Leave application submitted successfully', submissionData);
       
       // Construct success message with unpaid leave info if applicable
       let successMessage = 'Leave request submitted for review! The administrator or HR will review your request shortly.';

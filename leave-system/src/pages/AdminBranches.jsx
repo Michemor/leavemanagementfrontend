@@ -2,27 +2,72 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProtectedLayout from '../components/ProtectedLayout';
 import { useAlert } from '../hooks/alerthook';
+import { getInstitutions, createInstitution, updateInstitution, deleteInstitution } from '../services/ApiClient';
 
 export default function AdminBranches() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { showSuccess, showError, showWarning } = useAlert();
+  const { showSuccess, showError } = useAlert();
   
-  const [branches, setBranches] = useState([
-    { id: 1, name: 'New Haven Academy', location: 'New Haven', code: 'NHA' },
-    { id: 2, name: 'Team Impact Christian University', location: 'Toronto', code: 'TIUC' },
-    { id: 3, name: 'Lambton Christian School', location: 'Lambton', code: 'LCS' },
-  ]);
-  
-  const [isLoading, setIsLoading] = useState(false);
+  const [branches, setBranches] = useState([]);
+
+  // create institution
+  const createBranch = async (branchData) => {
+    try {
+      const response = await createInstitution(branchData);
+      setBranches(prev => [...prev, response.data]);
+      showSuccess('Branch added successfully!');
+    } catch (error) {
+      console.error('Error creating branch:', error);
+      showError('Failed to add branch. Please try again.');
+    }
+  };
+
+  // update institution
+  const editBranch = async (branchId, branchData) => {
+    try {
+      const response = await updateInstitution(branchId, branchData);
+      setBranches(prev => prev.map(b => b.id === branchId ? response.data : b));
+      showSuccess('Branch updated successfully!');
+    } catch (error) {
+      console.error('Error updating branch:', error);
+      showError('Failed to update branch. Please try again.');
+    }
+  };
+
+  // delete institution
+  const removeBranch = async (branchId) => {
+    try {
+      await deleteInstitution(branchId);
+      setBranches(prev => prev.filter(b => b.id !== branchId));
+      showSuccess('Branch deleted successfully!');
+    }
+    catch (error) {
+      console.error('Error deleting branch:', error);
+      showError('Failed to delete branch. Please try again.');
+    }
+  }
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const response = await getInstitutions();
+        setBranches(response.data);
+      }
+      catch (error) {
+        console.error('Error fetching branches:', error);
+        showError('Failed to load branches. Please refresh the page or contact support.');
+      }
+    };
+    fetchBranches();
+  }, [showError]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
   const [formData, setFormData] = useState({
-    name: '',
-    location: '',
-    code: '',
+    name: ''
   });
 
   const [errors, setErrors] = useState({});
@@ -60,20 +105,20 @@ export default function AdminBranches() {
   };
 
   const handleAddBranch = () => {
+    createBranch(formData);
     setIsEditing(false);
     setEditingId(null);
-    setFormData({ name: '', location: '', code: '' });
+    setFormData({ name: ''});
     setErrors({});
     setIsModalOpen(true);
   };
 
   const handleEditBranch = (branch) => {
+    editBranch(branch.id, formData);
     setIsEditing(true);
     setEditingId(branch.id);
     setFormData({
-      name: branch.name,
-      location: branch.location,
-      code: branch.code,
+      name: branch.name
     });
     setErrors({});
     setIsModalOpen(true);
@@ -81,10 +126,11 @@ export default function AdminBranches() {
 
   const handleDeleteBranch = (branchId) => {
     if (window.confirm('Are you sure you want to delete this branch?')) {
-      setBranches(branches.filter(b => b.id !== branchId));
-      showSuccess('Branch deleted successfully!');
+      removeBranch(branchId);
     }
   };
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -105,16 +151,14 @@ export default function AdminBranches() {
         showSuccess('Branch updated successfully!');
       } else {
         // Add new branch
-        const newBranch = {
-          id: Math.max(...branches.map(b => b.id), 0) + 1,
-          ...formData,
-        };
+          const newBranch = await createBranch(formData);
         setBranches([...branches, newBranch]);
         showSuccess('Branch added successfully!');
       }
       setIsModalOpen(false);
       setFormData({ name: '', location: '', code: '' });
     } catch (error) {
+      console.error('Error saving branch:', error);
       showError('Failed to save branch. Please try again.');
     }
   };
