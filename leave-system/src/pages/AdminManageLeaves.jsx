@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAlert } from '../hooks/alerthook';
-import { getLeaveTypes, updateLeaveType, deleteLeaveType, createLeaveType} from '../services/ApiClient';
+import { getLeaveTypes, updateLeaveType, deleteLeaveType, createLeaveType, toggleLeaveTypeActive } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminManageLeaves() {
@@ -15,8 +15,7 @@ export default function AdminManageLeaves() {
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
-        days_allowed: '',
-        description: ''
+        days_allowed: ''
     });
 
     // Fetch leave types on component mount
@@ -51,8 +50,7 @@ export default function AdminManageLeaves() {
     const resetForm = () => {
         setFormData({
             name: '',
-            days_allowed: '',
-            description: ''
+            days_allowed: ''
         });
         setEditingId(null);
         setShowForm(false);
@@ -79,16 +77,18 @@ export default function AdminManageLeaves() {
                 // Update existing leave type
                 await updateLeaveType(editingId, {
                     name: formData.name.trim(),
-                    days_allowed: parseInt(formData.days_allowed),
-                    description: formData.description.trim()
+                    days_allowed: parseInt(formData.days_allowed)
                 });
                 showSuccess('Leave type updated successfully!');
             } else {
+                console.log('Creating leave type with data:', {
+                    name: formData.name.trim(),
+                    days_allowed: parseInt(formData.days_allowed)
+                });
                 // Create new leave type
                 await createLeaveType({
                     name: formData.name.trim(),
-                    days_allowed: parseInt(formData.days_allowed),
-                    description: formData.description.trim()
+                    days_allowed: parseInt(formData.days_allowed)
                 });
                 showSuccess('Leave type created successfully!');
             }
@@ -108,8 +108,7 @@ export default function AdminManageLeaves() {
     const handleEdit = (leaveType) => {
         setFormData({
             name: leaveType.name,
-            days_allowed: leaveType.days_allowed,
-            description: leaveType.description || ''
+            days_allowed: leaveType.max_days
         });
         setEditingId(leaveType.id);
         setShowForm(true);
@@ -126,6 +125,18 @@ export default function AdminManageLeaves() {
                 console.error('Error deleting leave type:', error);
                 showError('Failed to delete leave type. Please try again.');
             }
+        }
+    };
+
+    // Handle toggle active status
+    const handleToggleActive = async (id) => {
+        try {
+            await toggleLeaveTypeActive(id);
+            showSuccess('Leave type status updated successfully!');
+            await fetchLeaveTypes();
+        } catch (error) {
+            console.error('Error toggling leave type status:', error);
+            showError('Failed to update leave type status. Please try again.');
         }
     };
 
@@ -192,21 +203,6 @@ export default function AdminManageLeaves() {
                                             onChange={handleInputChange}
                                             placeholder="e.g., 21"
                                             min="1"
-                                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                        />
-                                    </div>
-
-                                    {/* Description */}
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Description (Optional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            name="description"
-                                            value={formData.description}
-                                            onChange={handleInputChange}
-                                            placeholder="Add description for this leave type"
                                             className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                         />
                                     </div>
@@ -306,12 +302,9 @@ export default function AdminManageLeaves() {
                                     <div className="p-4">
                                         <div className="mb-4">
                                             <div className="flex items-baseline gap-2 mb-2">
-                                                <p className="text-3xl font-bold text-blue-600">{leaveType.days_allowed}</p>
+                                                <p className="text-3xl font-bold text-blue-600">{leaveType.max_days}</p>
                                                 <p className="text-slate-600 text-sm">days/year</p>
                                             </div>
-                                            {leaveType.description && (
-                                                <p className="text-slate-600 text-sm">{leaveType.description}</p>
-                                            )}
                                         </div>
 
                                         {/* Card Footer - Actions */}
@@ -324,6 +317,20 @@ export default function AdminManageLeaves() {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                 </svg>
                                                 Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleActive(leaveType.id)}
+                                                className={`flex-1 px-3 py-2 font-semibold rounded-lg transition-colors text-sm flex items-center justify-center gap-2 ${
+                                                    leaveType.is_active
+                                                        ? 'bg-green-50 text-green-600 hover:bg-green-100'
+                                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                                title={leaveType.is_active ? 'Click to deactivate' : 'Click to activate'}
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={leaveType.is_active ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m10-2a9 9 0 11-18 0 9 9 0 0118 0z"} />
+                                                </svg>
+                                                {leaveType.is_active ? 'Active' : 'Inactive'}
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(leaveType.id)}
