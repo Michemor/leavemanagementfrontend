@@ -183,6 +183,15 @@ export default function LeaveStats() {
 
     return (
         <div>
+            {/* Unpaid Leave Information Banner */}
+            <div className="mb-6 p-4 md:p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-lg">
+                <p className="text-xs font-bold text-amber-800 mb-2 uppercase tracking-wide">💼 About Unpaid Leave</p>
+                <p className="text-sm text-amber-900">
+                    When you exhaust your allocated leave days for a specific leave type, any additional days you request will be marked as <span className="font-bold">UNPAID LEAVE</span>. 
+                    These days will be noted in your records but will not be deducted from your leave balance. Your manager will need to approve unpaid leave requests.
+                </p>
+            </div>
+
             {/* Sample Notification Preview */}
             <div className="mb-6 p-4 md:p-6 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl">
                 <p className="text-xs font-semibold text-blue-700 mb-3 uppercase tracking-wide">📌 Sample Notification Preview</p>
@@ -276,6 +285,20 @@ export default function LeaveStats() {
                     <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
                         {formatDate(leave.start_date)} — {formatDate(leave.end_date)}
                     </p>
+
+                    {/* Unpaid Leave Indicator - if applicable */}
+                    {leave.unpaid_days && leave.unpaid_days > 0 && (
+                        <div className="mt-3 pt-3 border-t border-amber-200">
+                            <div className="bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                                <p className="text-xs font-bold text-amber-900 mb-1">
+                                    ⚠️ UNPAID LEAVE DAYS
+                                </p>
+                                <p className="text-xs text-amber-800">
+                                    {leave.unpaid_days} day{leave.unpaid_days !== 1 ? 's' : ''} marked as unpaid
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
             })}

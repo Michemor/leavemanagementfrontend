@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getStatistics, getAllEmployees } from '../services/ApiClient';
+import { getStatistics, getAllEmployees, listLeaves } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminReports() {
@@ -10,6 +10,7 @@ export default function AdminReports() {
   const [isLoading, setIsLoading] = useState(true);
   const [statistics, setStatistics] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [leaveApplications, setLeaveApplications] = useState([]);
 
   const fetchLeaveData = async () => {
     try {
@@ -62,9 +63,20 @@ export default function AdminReports() {
     }
   };
 
+  const fetchLeaveApplications = async () => {
+    try {
+      const response = await listLeaves();
+      const data = Array.isArray(response) ? response : (response.data || response.results || []);
+      setLeaveApplications(data);
+    } catch (error) {
+      console.error('Error fetching leave applications:', error);
+    }
+  };
+
   useEffect(() => {
     fetchLeaveData();
     fetchEmployeesData();
+    fetchLeaveApplications();
   }, []);
   
   const downloadPDF = () => {
@@ -144,6 +156,7 @@ export default function AdminReports() {
               className="px-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="summary">Summary Report</option>
+              <option value="applications">Leave Applications</option>
               <option value="employees">All Employees</option>
               <option value="department">Department Statistics</option>
               <option value="monthly">Monthly Statistics</option>
@@ -244,7 +257,105 @@ export default function AdminReports() {
             </div>
           )}
 
-          {/* Department Statistics */}
+          {/* Leave Applications Report */}
+          {reportType === 'applications' && (
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-slate-200 p-6">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Leave Applications</h2>
+                <p className="text-slate-600">
+                  Complete list of all employee leave applications with their status
+                </p>
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="border-b border-slate-200 p-4 flex gap-2 flex-wrap">
+                <div className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+                  ✓ Approved: {leaveApplications.filter(l => l.status === 'approved' || l.status === 'Approved').length}
+                </div>
+                <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
+                  ⏳ Pending: {leaveApplications.filter(l => l.status === 'pending' || l.status === 'Pending').length}
+                </div>
+                <div className="px-4 py-2 bg-red-100 text-red-800 rounded-full text-sm font-semibold">
+                  ✕ Rejected: {leaveApplications.filter(l => l.status === 'rejected' || l.status === 'Rejected').length}
+                </div>
+                <div className="px-4 py-2 bg-slate-100 text-slate-800 rounded-full text-sm font-semibold">
+                  📋 Total: {leaveApplications.length}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200">
+                      <th className="px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Employee Name</th>
+                      <th className="px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Email</th>
+                      <th className="hidden md:table-cell px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Leave Type</th>
+                      <th className="hidden sm:table-cell px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Start Date</th>
+                      <th className="hidden lg:table-cell px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">End Date</th>
+                      <th className="px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Status</th>
+                      <th className="hidden md:table-cell px-4 sm:px-6 py-4 text-left text-xs font-bold text-slate-900">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaveApplications.length > 0 ? (
+                      leaveApplications.map((app, idx) => {
+                        const status = (app.status || '').toLowerCase();
+                        const statusColor = 
+                          status === 'approved' ? 'bg-green-100 text-green-800' :
+                          status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          status === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-slate-100 text-slate-800';
+                        
+                        const statusIcon = 
+                          status === 'approved' ? '✓' :
+                          status === 'pending' ? '⏳' :
+                          status === 'rejected' ? '✕' :
+                          '•';
+
+                        return (
+                          <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50 transition">
+                            <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-slate-900">
+                              {app.employee?.first_name} {app.employee?.last_name || 'N/A'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-4 text-sm text-slate-600 truncate">
+                              {app.employee?.email || 'N/A'}
+                            </td>
+                            <td className="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-slate-600">
+                              {app.leave_type?.name || app.leave_type || 'N/A'}
+                            </td>
+                            <td className="hidden sm:table-cell px-4 sm:px-6 py-4 text-sm text-slate-600">
+                              {app.start_date ? new Date(app.start_date).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-slate-600">
+                              {app.end_date ? new Date(app.end_date).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-4">
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor}`}>
+                                {statusIcon} {status.charAt(0).toUpperCase() + status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-slate-600">
+                              {app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="7" className="px-4 sm:px-6 py-8 text-center text-slate-500">
+                          No leave applications found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* All Employees */}
           {reportType === 'employees' && (
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
               {/* Summary Card */}

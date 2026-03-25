@@ -16,6 +16,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
   const [selectedTypeMaxDays, setSelectedTypeMaxDays] = useState(null);
   const [daysRequested, setDaysRequested] = useState(0);
   const [exceedsLimit, setExceedsLimit] = useState(false);
+  const [unpaidLeaveDays, setUnpaidLeaveDays] = useState(0);
   const [isLoadingPolicies, setIsLoadingPolicies] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -135,11 +136,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       const days = calculateDays(newStart, newEnd);
       setDaysRequested(days);
 
-      // Check if exceeds limit
+      // Check if exceeds limit and calculate unpaid days
       if (selectedTypeMaxDays && days > selectedTypeMaxDays) {
         setExceedsLimit(true);
+        setUnpaidLeaveDays(days - selectedTypeMaxDays);
       } else {
         setExceedsLimit(false);
+        setUnpaidLeaveDays(0);
       }
     } else {
       setFormData((prev) => ({
@@ -152,14 +155,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate date range
+    // Validate date range - warn if exceeds but still allow
     if (exceedsLimit) {
-      showError(`You cannot request more than ${selectedTypeMaxDays} days for this leave type.`);
-      return;
+      showWarning(`⚠️ You are requesting ${daysRequested} days but only have ${selectedTypeMaxDays} allocated. The additional ${unpaidLeaveDays} day(s) will be marked as UNPAID LEAVE.`);
     }
 
     if (daysRequested === 0) {
-      showWarning('Please select valid start and end dates.');
+      showError('Please select valid start and end dates.');
       return;
     }
 
@@ -201,7 +203,13 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       };
 
       await applyLeave(submissionData);
-      showSuccess('Leave request submitted for review! The administrator or HR will review your request shortly.');
+      
+      // Construct success message with unpaid leave info if applicable
+      let successMessage = 'Leave request submitted for review! The administrator or HR will review your request shortly.';
+      if (unpaidLeaveDays > 0) {
+        successMessage += ` ⚠️ Note: ${unpaidLeaveDays} day${unpaidLeaveDays !== 1 ? 's' : ''} of this request will be marked as UNPAID LEAVE.`;
+      }
+      showSuccess(successMessage);
 
       // Reset form to first policy
       const firstType = leaveTypes[0];
@@ -214,6 +222,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
         document: null,
       });
       setDaysRequested(0);
+      setUnpaidLeaveDays(0);
 
       // Call parent callback to refresh history if provided
       if (typeof onSubmitSuccess === 'function') {
@@ -405,6 +414,27 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
                       ✓ {selectedTypeMaxDays - daysRequested} day{selectedTypeMaxDays - daysRequested !== 1 ? 's' : ''} remaining
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Unpaid Leave Warning */}
+              {unpaidLeaveDays > 0 && (
+                <div className="p-3 sm:p-4 bg-amber-50 border-l-4 border-amber-500 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-900 text-sm sm:text-base">
+                        UNPAID LEAVE NOTICE
+                      </p>
+                      <p className="text-amber-800 text-xs sm:text-sm mt-1">
+                        You have exhausted your allocated {selectedTypeMaxDays} day(s) for {formData.leaveTypeName}. 
+                        The additional <span className="font-bold">{unpaidLeaveDays} day{unpaidLeaveDays !== 1 ? 's' : ''}</span> will be marked as <span className="font-bold">UNPAID LEAVE</span>.
+                      </p>
+                      <p className="text-amber-700 text-xs mt-2 italic">
+                        💡 Unpaid leave will not be deducted from your regular leave balance but will be noted in your records.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
