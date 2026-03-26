@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api/';
+const API_BASE_URL = 'https://lms-backend-658v.onrender.com/api/';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -120,14 +120,19 @@ export const getCurrentUser = async () => {
  * Set/Reset Password after clicking reset link
  * POST /auth/set-password/
  */
-export const setPassword = async (token, password) => {
+export const setPassword = async (uid, token, newPassword, confirmPassword) => {
   try {
-    const response = await apiClient.post('/auth/set-password/', { token, password });
+    const response = await apiClient.post('/auth/set-password/', { 
+      uid: uid, 
+      token: token, 
+      new_password: newPassword, 
+      confirm_password: confirmPassword  });
     return response;
   } catch (error) {
     throw new Error('Failed to set password', { cause: error.message });
   }
 };
+
 
 /**
  * Token Refresh - Refresh expired access token
@@ -674,5 +679,15 @@ export const getStatistics = async () => {
     return response;
   } catch (error) {
     throw new Error('Failed to fetch statistics', { cause: error.message });
+  }
+};
+
+
+export const resetPassword = async (email) => {
+  try {    
+    const response = await apiClient.post('/auth/password-reset/', { email });
+    return response;
+  } catch (error) {
+    throw new Error('Failed to send password reset email', { cause: error.message });
   }
 };

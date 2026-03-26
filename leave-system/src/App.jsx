@@ -17,7 +17,6 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" />} />
-
       <Route path="/login" element={<Login />} />
       {/* Protected Employee Routes */}
       <Route path="/dashboard" element={<Dashboard />} />

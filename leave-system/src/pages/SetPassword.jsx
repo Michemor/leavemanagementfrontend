@@ -1,38 +1,38 @@
-import { useParams } from 'react-router-dom';
-import { useState } from 'react';
-import { setPassword as resetPassword } from '../services/ApiClient';
-import { useAlert } from '../hooks/alerthook';
+import { useAlert } from "../hooks/alerthook";
+import { resetPassword } from "../services/ApiClient";
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 
 export default function SetPasswordPage () {
     const { uid, token } = useParams();
-    const [password, setPassword] = useState("");
+    const [formData, setFormData] = useState({ password: "", confirm: "" });
     const { showSuccess, showError } = useAlert();
 
-    const performPasswordReset = (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        resetPassword(uid, token, password)
+        
+        // Pass all four required fields to your ApiClient
+        resetPassword(uid, token, formData.password, formData.confirm)
             .then(() => {
-                showSuccess('Password has been reset successfully! You can now log in with your new password.');
-                // Optionally, you can redirect to the login page after a short delay
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 3000);
+                showSuccess('Password set! Redirecting...');
+                setTimeout(() => window.location.href = '/login', 3000);
             })
-            .catch((error) => {
-                console.error('Error resetting password:', error);
-                showError(error.message || 'Failed to reset password. Please try again.');
-            });
-        };
+            .catch((err) => showError(err.response?.data?.detail || 'Error setting password'));
+    };
 
     return (
-        <form onSubmit={performPasswordReset}>
+        <form onSubmit={handleSubmit} className="space-y-4">
             <input 
                 type="password" 
                 placeholder="New Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)} 
+                onChange={(e) => setFormData({...formData, password: e.target.value})} 
+            />
+            <input 
+                type="password" 
+                placeholder="Confirm Password"
+                onChange={(e) => setFormData({...formData, confirm: e.target.value})} 
             />
             <button type="submit">Set Password</button>
         </form>
     );
-};
+}
