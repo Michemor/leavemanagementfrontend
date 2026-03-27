@@ -23,6 +23,7 @@ export default function App() {
       <Route path="/my-requests" element={<MyRequests />} />
       <Route path="/history" element={<History />} />
       <Route path="/calendar" element={<LeaveCalendar />} />
+      <Route path="/set-password" element={<SetPassword />} />
       <Route path = "/set-password/:uid/:token" element={<SetPassword />} />
 
       {/* Protected Admin Routes */}
