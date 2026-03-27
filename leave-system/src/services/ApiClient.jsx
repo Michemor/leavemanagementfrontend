@@ -140,7 +140,7 @@ export const passwordResetRequest = async (email) => {
  * @param {*} confirmPassword 
  * @returns 
  */
-export const setPassword = async (uid, token, newPassword, confirmPassword) => {
+export const employeeSetPassword = async (uid, token, newPassword, confirmPassword) => {
   try {
     const response = await apiClient.post('/auth/set-password/', {
       uid: uid,
@@ -154,6 +154,17 @@ export const setPassword = async (uid, token, newPassword, confirmPassword) => {
   }
 };
 
+export const setPasswordForLoggedInUser = async (newPassword, confirmPassword) => {
+  try {
+    const response = await apiClient.put('/auth/set-password-post-login/', {
+      new_password: newPassword,
+      confirm_password: confirmPassword
+    });
+    return response;
+  } catch (error) {
+    throw new Error('Failed to set password', { cause: error.message });
+  }
+};
 
 
 /**

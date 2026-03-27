@@ -1,6 +1,6 @@
 import { useParams, useState } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { setPassword as resetPassword, setPasswordForLoggedInUser } from '../services/ApiClient';
+import { employeeSetPassword, setPasswordForLoggedInUser } from '../services/ApiClient';
 import { useAlert } from '../hooks/alerthook';
 import { useAuth } from '../hooks/authhook';
 
@@ -34,11 +34,11 @@ export const SetPasswordPage = () => {
 
         try {
             if (isFromEmailLink) {
-                await resetPassword(uid, token, password);
+                await employeeSetPassword(uid, token, password, confirmPassword);
                 showSuccess('Password set successfully! Redirecting to login...');
                 setTimeout(() => navigate('/login'), 2000);
             } else if (isFromPostLogin) {
-                await setPasswordForLoggedInUser(password); // PUT /user/set-password/
+                await setPasswordForLoggedInUser(password, confirmPassword); // PUT /user/set-password/
                 showSuccess('Password set successfully! Redirecting to dashboard...');
                 // Optional: refresh user context to remove must_reset_password
                 refreshUser && refreshUser();
