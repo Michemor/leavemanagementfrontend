@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { getStatistics, getEmployees, listLeaves } from '../services/ApiClient';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { getReports, getEmployees, listLeaves, getDepartmentReports } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jsPDF-autotable';
+
 
 export default function AdminReports() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   // State Management
   const [reportType, setReportType] = useState('summary');
@@ -20,7 +24,7 @@ export default function AdminReports() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
 
-  const [statistics, setStatistics] = useState({
+  const [reports, setReports] = useState({
     totalApplications: 0,
     approvedApplications: 0,
     rejectedApplications: 0,
@@ -28,33 +32,37 @@ export default function AdminReports() {
     departmentStats: [],
   });
 
-  // 1. Fetch Summary Data Only (No Bulk Leaves/Employees)
+  // 1. Fetch Summary Data
   const fetchSummaryData = async () => {
     try {
       setIsLoading(true);
-      const statsData = await getStatistics();
-      console.log('Fetched Stats Data:', statsData);
-      const summary = statsData.summary || {};
-      const users = statsData.users || [];
-      const deptMap = {};
+      const [globalResponse, deptResponse] = await Promise.all( [
+        getReports(),
+        getDepartmentReports()
+      ]);
+      const globalReports = globalResponse.data;
+      const deptReports = deptResponse.data;
 
-      users.forEach((user) => {
-        const dept = user.department || 'General';
-        const inst = user.institution_name || 'Main Branch';
-        const key = `${inst} - ${dept}`;
-        
-        if (!deptMap[key]) {
-          deptMap[key] = { institution: inst, department: dept, employees: 0 };
-        }
-        deptMap[key].employees += 1;
-      });
+      console.log('Global Reports:', globalReports);
+      console.log('Department Reports:', deptReports);
+      const deptMap = [];
 
-      setStatistics({
-        totalApplications: summary.total_applications || 0,
-        approvedApplications: summary.approved_applications || 0,
-        rejectedApplications: summary.rejected_applications || 0,
-        pendingApplications: summary.pending_applications || 0,
-        departmentStats: Object.values(deptMap),
+      Object.entries(deptReports).forEach(([inst, depts]) => {
+        Object.entries(depts).forEach(([dept, leaves]) => {
+          deptMap.push({
+            institution: inst,
+            department: dept,
+            employees: leaves.length
+          });
+        })
+      })
+      setReports({
+        totalApplications: globalReports.total_applications || 0,
+        approvedApplications: globalReports.approved || 0,
+        rejectedApplications: globalReports.rejected || 0,
+        pendingApplications: globalReports.pending || 0,
+        departmentStats: deptMap,
+        report_data: deptReports
       });
 
     } catch (error) {
@@ -78,8 +86,11 @@ export default function AdminReports() {
     // Simulate debounced search (In production, hit /api/employees/?search=term)
     const timeoutId = setTimeout(async () => {
       try {
+        console.log('Searching for employees with term:', employeeSearch);
         const res = await getEmployees({ search: employeeSearch });
+        console.log('Search results:', res);
         const results = Array.isArray(res.data) ? res.data : res.data.results || [];
+        console.log('Parsed search results:', results);
         // Keep to max 5 results for clean UI
         setSearchResults(results.slice(0, 5));
       } catch (error) {
@@ -93,10 +104,13 @@ export default function AdminReports() {
   // 3. Paginated Fetch for Individual User Records
   const fetchIndividualLeaves = async (employeeId, pageNum = 1) => {
     try {
+      console.log(`Fetching leaves for employee ${employeeId} - Page ${pageNum}`);
       // Passes employee_id and page to utilize backend optimization
       const res = await listLeaves({ employee_id: employeeId, page: pageNum });
+      console.log('Paginated leaves response:', res);
       const rawData = res.data;
-      
+      console.log('Individual leaves data:', rawData);
+
       if (rawData.results) {
         setIndividualLeaves(rawData.results);
         setHasNext(!!rawData.next);
@@ -117,37 +131,74 @@ export default function AdminReports() {
     fetchIndividualLeaves(emp.id, 1);
   };
 
-  // 4. Clean Document Generator (CSV Export)
-  const downloadExcel = () => {
-    if (statistics.departmentStats.length === 0) return;
+  const downloadPDFReport = () => {
+    if (!reports.report_data) return;
 
-    // Headers
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Institution,Department,Total Employees\n";
-
-    // Data Rows
-    statistics.departmentStats.forEach(stat => {
-      const row = `"${stat.institution}","${stat.department}","${stat.employees}"`;
-      csvContent += row + "\n";
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
     });
+    const timestamp = new Date().toLocaleString();
 
-    // Auto-download
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Department_Stats_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    doc.setFontSize(22);
+    doc.text("Team Impact University: Leave Report", 14, 22);
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${timestamp}`, 14, 32);
+
+    let finalY = 40;
+
+    // 1. Institutions
+    Object.entries(reports.report_data).forEach(([inst, depts]) => {
+      doc.setFontSize(16);
+      doc.setTextColor(50, 100, 200);
+      doc.text(inst, 14, finalY);
+      finalY += 8;
+
+      // 2. DEPARTMENT LOOP
+
+      Object.entries(depts).forEach(([dept, leaves]) => {
+        doc.setFontSize(14);
+        doc.text(`Department: ${dept}`, 20, finalY + 5);
+
+        autoTable(doc, {
+          startY: finalY + 10,
+          head: [['Employee', 'Leave Type', 'Start Date', 'End Date', 'Duration', 'Status']],
+          body: leaves.map(l => [
+            l.employee || 'N/A',
+            l.leave_type_name || l.leave_type || 'N/A',
+            l.start_date || 'N/A',
+            l.end_date || 'N/A',
+            l.duration ? `${l.duration} days` : 'N/A',
+            l.status || 'N/A'
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor: [50, 100, 200] },
+        })
+        finalY = doc.lastAutoTable.finalY + 10;
+      })
+
+      doc.save(`Leave_Report_${inst.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+    });
   };
 
   return (
     <ProtectedLayout currentPath={location.pathname}>
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="min-h-screen bg-slate-50 p-6 sm:p-8">
         <div className="max-w-7xl mx-auto">
           
           <div className="mb-10">
-            <h1 className="text-5xl font-black text-slate-900 mb-3">Admin Reports</h1>
+              <button
+                  onClick={() => navigate('/admin/dashboard')}
+                  className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition-colors"
+              >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back to Dashboard
+              </button>
+            <h1 className="text-4xl sm:text-5xl font-black text-slate-900 mb-3">Admin Reports</h1>
             <p className="text-slate-600 text-lg">System-wide analytics and individual employee tracking</p>
           </div>
 
@@ -195,10 +246,16 @@ export default function AdminReports() {
             )}
 
             <div className="flex gap-2 ml-auto">
-              <button onClick={downloadExcel} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">
-                Download Dept. CSV
-              </button>
-            </div>
+                <button 
+                  onClick={() => downloadPDFReport()} 
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-lg transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export Full PDF Report
+                </button>     
+                </div>
           </div>
 
           {isLoading ? (
@@ -210,10 +267,10 @@ export default function AdminReports() {
               {reportType === 'summary' && (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <StatCard label="Total Applications" value={statistics.totalApplications} />
-                        <StatCard label="Approved" value={statistics.approvedApplications} color="text-green-600" />
-                        <StatCard label="Rejected" value={statistics.rejectedApplications} color="text-red-600" />
-                        <StatCard label="Pending" value={statistics.pendingApplications} color="text-yellow-600" />
+                        <StatCard label="Total Applications" value={reports.totalApplications} />
+                        <StatCard label="Approved" value={reports.approvedApplications} color="text-green-600" />
+                        <StatCard label="Rejected" value={reports.rejectedApplications} color="text-red-600" />
+                        <StatCard label="Pending" value={reports.pendingApplications} color="text-yellow-600" />
                     </div>
                 </>
               )}
@@ -277,8 +334,7 @@ export default function AdminReports() {
         </div>
       </div>
     </ProtectedLayout>
-  );
-}
+  )}
 
 function StatCard({ label, value, color = "text-slate-900" }) {
   return (

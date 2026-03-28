@@ -1,12 +1,13 @@
 //src/pages/AdminManageLeaves.jsx
 import { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAlert } from '../hooks/alerthook';
 import { getLeaveTypes, updateLeaveType, deleteLeaveType, createLeaveType, toggleLeaveTypeActive } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminManageLeaves() {
     const location = useLocation();
+    const navigate = useNavigate();
     const { showSuccess, showError } = useAlert();
     const [leaveTypes, setLeaveTypes] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -148,9 +149,19 @@ export default function AdminManageLeaves() {
 
     return (
         <ProtectedLayout currentPath={location.pathname}>
-            <div className="min-h-screen bg-slate-50 p-8">
+            <div className="min-h-screen bg-slate-50 p-6 sm:p-8">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
+                    <div className="mb-8">
+                        <button
+                            onClick={() => navigate('/admin/dashboard')}
+                            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                            Back to Dashboard
+                        </button>
                     <div className="flex items-start justify-between mb-8">
                         <div>
                             <h1 className="text-4xl font-black text-slate-900 mb-2">Manage Leave Types</h1>
@@ -171,6 +182,7 @@ export default function AdminManageLeaves() {
                                 </span>
                             </button>
                         )}
+                    </div>
                     </div>
 
                     {/* Form Section */}

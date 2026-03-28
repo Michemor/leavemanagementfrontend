@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/';
+const API_BASE_URL = 'https://lms-backend-658v.onrender.com/api/';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -720,15 +720,31 @@ export const toggleInstitutionActive = async (institutionId) => {
 };
 
 /**
- * Get statistics - Note: This endpoint may not exist in the backend API.
- * Kept for backward compatibility. Discuss with backend team about available stats endpoints.
+ * Get reports - across the database
  */
-export const getStatistics = async () => {
+export const getReports = async () => {
   try {
     // This endpoint path needs verification with backend
-    const response = await apiClient.get('/leaves/statistics/');
+    const response = await apiClient.get('/leaves/reports/');
     return response;
   } catch (error) {
-    throw new Error('Failed to fetch statistics', { cause: error.message });
+    throw new Error('Failed to fetch reports', { cause: error.message });
   }
 };
+
+
+
+/**
+ * Get department-specific reports (HR/Admin Only)
+ * GET /leaves/department-reports/<department_id>/
+ * @returns 
+ */
+export const getDepartmentReports = async () => {
+  try {
+    // This endpoint path needs verification with backend
+    const response = await apiClient.get('/leaves/department-reports/');
+    return response;
+  } catch (error) {
+    throw new Error('Failed to fetch department reports', { cause: error.message });
+  }
+}

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getMyLeaves } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function History() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [leaves, setLeaves] = useState([]);
 
   useEffect(() => {
@@ -23,11 +24,24 @@ export default function History() {
   }, []);
 
   return (
-    <ProtectedLayout
-      title="Leave History"
-      subtitle="View all your leave requests"
-      currentPath={location.pathname}
-    >
+    <ProtectedLayout currentPath={location.pathname}>
+      <div className="min-h-screen bg-slate-50 p-6 sm:p-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+              <button
+                  onClick={() => navigate('/dashboard')}
+                  className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition-colors"
+              >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back to Dashboard
+              </button>
+              <h1 className="text-4xl font-black text-slate-900 mb-2">Leave History</h1>
+              <p className="text-slate-600">View all your leave requests</p>
+          </div>
+
       <div className="space-y-4">
         {leaves.length > 0 ? (
           leaves.map((leave) => (
@@ -62,6 +76,8 @@ export default function History() {
             <p className="text-gray-500">No leave history found</p>
           </div>
         )}
+      </div>
+      </div>
       </div>
     </ProtectedLayout>
   );

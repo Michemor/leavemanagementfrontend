@@ -154,7 +154,7 @@ export default function AddEmployee() {
 
   return (
     <ProtectedLayout>
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="h-screen bg-slate-50 p-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="mb-8">

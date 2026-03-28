@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAlert } from '../hooks/alerthook';
-import { deactivateEmployee, getEmployees, resendWelcomeEmail, updateEmployee } from '../services/ApiClient';
+import { deactivateEmployee, getEmployees, resendWelcomeEmail, updateEmployee, toggleEmployeeActive } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminEmployeeManagement() {
@@ -22,7 +22,9 @@ export default function AdminEmployeeManagement() {
         try {
             setIsLoading(true);
             const response = await getEmployees();
-            setEmployees(response.data.results);
+            const data = response.data.results;
+            console.log('Employees Response:', data);
+            setEmployees(data);
         } catch (error) {
             console.error('Error fetching employees:', error);
             showError('Failed to load employees. Please try again.');
@@ -106,12 +108,29 @@ export default function AdminEmployeeManagement() {
             try {
                 const res = await deactivateEmployee(id);
                 console.log('Deactivate response:', res);
-                showSuccess('Employee deactivated successfully!');
+                showSuccess('Employee record has been deleted successfully!');
                 await fetchEmployees();
             } catch (error) {
                 console.error('Error deactivating employee:', error);
                 showError('Failed to deactivate employee. Please try again.');
             }
+        }
+    };
+
+    const handleToggleActive = async (id) => {
+        const employeeToToggle = employees.find(emp => emp.id === id);
+        if (!employeeToToggle) return;
+        
+        const willBeActive = !employeeToToggle.is_active;
+
+        try {
+            const res = await toggleEmployeeActive(id);
+            console.log('Toggle active response:', res);
+            showSuccess(`Employee has been ${willBeActive ? 'activated' : 'deactivated'} successfully!`);
+            await fetchEmployees();
+        } catch (error) {
+            console.error('Error toggling employee active status:', error);
+            showError('Failed to update employee status. Please try again.');
         }
     };
 
@@ -292,7 +311,7 @@ export default function AdminEmployeeManagement() {
                                                         {employee.role}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-sm">
+                                                <td className="px-6 py-4 flex gap-3 text-sm justify-end">
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => handleEditClick(employee)}
@@ -302,6 +321,16 @@ export default function AdminEmployeeManagement() {
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                             </svg>
                                                             Edit
+                                                        </button>
+                                                       <button
+                                                            onClick={() => handleToggleActive(employee.id)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                                              employee.is_active 
+                                                                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
+                                                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                                            }`}
+                                                        >
+                                                                {employee.is_active ? 'Deactivate' : 'Activate'}
                                                         </button>
                                                         <button
                                                             onClick={() => handleDelete(employee.id, `${employee.first_name} ${employee.last_name}`)}
@@ -400,20 +429,6 @@ export default function AdminEmployeeManagement() {
                                         onChange={handleEditFormChange}
                                         className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                         required
-                                    />
-                                </div>
-
-                                {/* Employee ID */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Employee ID
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="employee_id"
-                                        value={editFormData.employee_id || ''}
-                                        readOnly
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-100 cursor-not-allowed text-slate-600"
                                     />
                                 </div>
 

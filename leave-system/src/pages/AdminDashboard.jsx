@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/authhook';
 import { useAlert } from '../hooks/alerthook';
 import { useEffect, useState } from 'react';
-import { listLeaves, getMyLeaves, getPendingLeaves } from '../services/ApiClient';
+import { getMyLeaves, getPendingLeaves } from '../services/ApiClient';
 import { getUserDisplayName } from '../utils/userUtils';
 import ProtectedLayout from '../components/ProtectedLayout';
 import ApprovedLeaveCard from '../components/LeaveStats';
@@ -54,8 +54,7 @@ export default function Dashboard() {
         const fetchApprovedLeaves = async () => {
             const data = await getMyLeaves();
             const approvedleaves = data.data;
-            console.log('Approved Leaves Response:', approvedleaves);
-            const approvedData = Array.isArray(approvedleaves.data) ? approvedleaves.data : approvedleaves.data.results || [];
+            const approvedData = Array.isArray(approvedleaves) ? approvedleaves : [];
             setLeaveRequests(approvedData.filter(leave => leave.status?.toLowerCase() === 'approved'));
         };
         fetchApprovedLeaves();
