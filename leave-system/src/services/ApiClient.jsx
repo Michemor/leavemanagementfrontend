@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api/';
+const API_BASE_URL = 'http://127.0.0.1:8000/api/';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -15,8 +15,13 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     // Public endpoints that don't require authentication
-    const publicEndpoints = ['/auth/login/', '/auth/set-password/'];
-    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
+    const publicEndpoints = [
+      '/auth/login/', 
+      '/auth/set-password/:uid/:token/',
+      '/auth/password-reset/',
+      '/auth/set-password/',
+    ];
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url === endpoint);
 
     if (!isPublicEndpoint) {
       const token = localStorage.getItem('token');
@@ -52,7 +57,11 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const originalRequest = error.config;
+    if (
+          error.response && 
+          error.response.status === 401 &&
+          !originalRequest.url.includes('/auth/login/')){
       console.error('Token invalid or expired. Logging out...');
 
       if (alertHandler) {
@@ -120,14 +129,52 @@ export const getCurrentUser = async () => {
  * Set/Reset Password after clicking reset link
  * POST /auth/set-password/
  */
-export const setPassword = async (token, password) => {
+export const passwordResetRequest = async (email) => {
   try {
-    const response = await apiClient.post('/auth/set-password/', { token, password });
+    // This endpoint path needs verification with backend
+    const response = await apiClient.post('/auth/password-reset/', { email });
+    return response;
+  } catch (error) {
+    throw new Error('Failed to send password reset email', { cause: error.message });
+  }
+};
+
+  
+/**
+ * Set Password for both post-login reset and email link reset
+ * POST /auth/set-password/
+ * @param {*} uid 
+ * @param {*} token 
+ * @param {*} newPassword 
+ * @param {*} confirmPassword 
+ * @returns 
+ */
+export const employeeSetPassword = async (uid, token, newPassword, confirmPassword) => {
+  try {
+    const response = await apiClient.post('/auth/set-password/', {
+      uid: uid,
+      token: token,
+      new_password: newPassword,
+      confirm_password: confirmPassword
+    });
     return response;
   } catch (error) {
     throw new Error('Failed to set password', { cause: error.message });
   }
 };
+
+export const setPasswordForLoggedInUser = async (newPassword, confirmPassword) => {
+  try {
+    const response = await apiClient.post('/auth/set-password-post-login/', {
+      new_password: newPassword,
+      confirm_password: confirmPassword
+    });
+    return response;
+  } catch (error) {
+    throw new Error('Failed to set password', { cause: error.message });
+  }
+};
+
 
 /**
  * Token Refresh - Refresh expired access token
@@ -167,21 +214,42 @@ export const listLeaves = async (searchParams = {}) => {
  */
 export const applyLeave = async (leaveData) => {
   try {
-    const payload = {
-      leave_type: leaveData.leave_type || leaveData.leaveType,
-      start_date: leaveData.start_date || leaveData.startDate,
-      end_date: leaveData.end_date || leaveData.endDate,
-      reason: leaveData.reason || '',
-    };
-    const response = await apiClient.post('/leaves/', payload);
-    return response;
+    // If a document is included, use FormData (multipart/form-data)
+    if (leaveData.document) {
+      const formData = new FormData();
+      formData.append('leave_type', leaveData.leave_type || leaveData.leaveType);
+      formData.append('start_date', leaveData.start_date || leaveData.startDate);
+      formData.append('end_date', leaveData.end_date || leaveData.endDate);
+      formData.append('reason', leaveData.reason || '');
+      formData.append('supporting_document', leaveData.document);
+
+      const response = await apiClient.post('/leaves/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response;
+    } else {
+      const payload = {
+        leave_type: leaveData.leave_type || leaveData.leaveType,
+        start_date: leaveData.start_date || leaveData.startDate,
+        end_date: leaveData.end_date || leaveData.endDate,
+        reason: leaveData.reason || '',
+      };
+      const response = await apiClient.post('/leaves/', payload);
+      return response;
+    }
   } catch (error) {
     console.error('Leave application error response:', error.response?.data);
     console.error('Leave application error status:', error.response?.status);
     console.error('Leave application error headers:', error.response?.headers);
     console.error('Request config:', error.config);
     console.error('Full error details:', error);
-    throw new Error('Failed to apply for leave', { cause: error.message });
+    
+    // Pass the server error response forward so the modal can extract and display it
+    const newError = new Error('Failed to apply for leave');
+    newError.response = error.response;
+    throw newError;
   }
 };
 
@@ -200,7 +268,7 @@ export const getLeave = async (leaveId) => {
 
 /**
  * Update Leave (Full)
- * PUT /leaves/<id>/
+ * put /leaves/<id>/
  */
 export const updateLeave = async (leaveId, leaveData) => {
   try {
@@ -267,6 +335,8 @@ export const updateLeaveStatus = async (leaveId, status, adminRemarks = '') => {
     throw new Error('Failed to update leave status', { cause: error.message });
   }
 };
+
+
 
 /**
  * List Pending Leaves (HR/Admin Only)
@@ -346,7 +416,7 @@ export const getLeaveType = async (leaveTypeId) => {
 
 /**
  * Update Leave Type (Full)
- * PUT /leave-types/<id>/
+ * put /leave-types/<id>/
  */
 export const updateLeaveType = async (leaveTypeId, leaveTypeData) => {
   try {
@@ -444,7 +514,7 @@ export const getEmployee = async (employeeId) => {
 
 /**
  * Update Employee (Full) (HR/Admin Only)
- * PUT /employees/<id>/
+ * put /employees/<id>/
  */
 export const updateEmployee = async (employeeId, employeeData) => {
   try {
@@ -518,7 +588,10 @@ export const resendWelcomeEmail = async (employeeId) => {
     const response = await apiClient.post(`/employees/${employeeId}/resend_welcome_email/`);
     return response;
   } catch (error) {
-    throw new Error('Failed to resend welcome email', { cause: error.message });
+    const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || 'Unknown error occurred';
+    const newError = new Error(`Failed to resend welcome email: ${errorMsg}`);
+    newError.response = error.response;
+    throw newError;
   }
 };
 
@@ -569,7 +642,7 @@ export const getInstitution = async (institutionId) => {
 
 /**
  * Update Institution (Full) (Admin Only)
- * PUT /institutions/<id>/
+ * put /institutions/<id>/
  */
 export const updateInstitution = async (institutionId, institutionData) => {
   try {
@@ -645,23 +718,6 @@ export const toggleInstitutionActive = async (institutionId) => {
     throw new Error('Failed to toggle institution status', { cause: error.message });
   }
 };
-
-
-/**
- * Password reset request - Note: This endpoint may not exist in the backend API.
- * Kept for backward compatibility. Discuss with backend team about the password reset flow.
- */
-export const passwordResetRequest = async (email) => {
-  try {
-    // This endpoint path needs verification with backend
-    const response = await apiClient.post('/auth/password-reset/', { email });
-    return response;
-  } catch (error) {
-    throw new Error('Failed to send password reset email', { cause: error.message });
-  }
-};
-
-
 
 /**
  * Get statistics - Note: This endpoint may not exist in the backend API.

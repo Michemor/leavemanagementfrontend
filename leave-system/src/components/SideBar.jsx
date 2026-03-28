@@ -2,14 +2,14 @@ import { MdClose, MdExitToApp } from 'react-icons/md';
 import { useAuth } from '../hooks/authhook';
 import { getAuthorizedMenuItems } from '../utils/sidebarConfig';
 
-
 export default function SideBar({
   isMobileMenuOpen,
   setIsMobileMenuOpen,
   onNavigate,
   onLogout,
   currentPath = '/dashboard',
-  branding = 'Leave System'
+  branding = 'Team Impact Christian University',
+  navIcon,
 }) {
   const { user } = useAuth();
 

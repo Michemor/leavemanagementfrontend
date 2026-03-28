@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAlert } from '../hooks/alerthook';
-import { deactivateEmployee, getEmployees, updateEmployee } from '../services/ApiClient';
+import { deactivateEmployee, getEmployees, resendWelcomeEmail, updateEmployee } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminEmployeeManagement() {
@@ -11,7 +11,6 @@ export default function AdminEmployeeManagement() {
     const { showSuccess, showError } = useAlert();
     const [employees, setEmployees] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [showPasswordMap, setShowPasswordMap] = useState({});
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRole, setFilterRole] = useState('all');
     const [editingEmployee, setEditingEmployee] = useState(null);
@@ -23,10 +22,7 @@ export default function AdminEmployeeManagement() {
         try {
             setIsLoading(true);
             const response = await getEmployees();
-            console.log('Full response:', response)
-            console.log('Employee roles in response:', response.data.results.map(emp => ({ name: emp.first_name + ' ' + emp.last_name, role: emp.role })));
             setEmployees(response.data.results);
-
         } catch (error) {
             console.error('Error fetching employees:', error);
             showError('Failed to load employees. Please try again.');
@@ -38,14 +34,6 @@ export default function AdminEmployeeManagement() {
     useEffect(() => {
         fetchEmployees();
     }, [fetchEmployees]);
-
-    // Toggle password visibility
-    const togglePasswordVisibility = (employeeId) => {
-        setShowPasswordMap(prev => ({
-            ...prev,
-            [employeeId]: !prev[employeeId]
-        }));
-    };
 
     const handleUpdate = async (employeeId, updatedData) => {
         try {
@@ -90,7 +78,8 @@ export default function AdminEmployeeManagement() {
 
         try {
             setIsSubmitting(true);
-            await handleUpdate(editingEmployee, editFormData);
+            const res = await handleUpdate(editingEmployee, editFormData);
+            console.log('Update response:', res);
         } finally {
             setIsSubmitting(false);
         }
@@ -115,7 +104,8 @@ export default function AdminEmployeeManagement() {
     const handleDelete = async (id, name) => {
         if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
             try {
-                await deactivateEmployee(id);
+                const res = await deactivateEmployee(id);
+                console.log('Deactivate response:', res);
                 showSuccess('Employee deactivated successfully!');
                 await fetchEmployees();
             } catch (error) {
@@ -131,12 +121,24 @@ export default function AdminEmployeeManagement() {
             (emp.first_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (emp.last_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (emp.email?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase()));
+            (emp.id?.toString().includes(searchTerm));
         
         const matchesRole = filterRole === 'all' || emp.role === filterRole;
         
         return matchesSearch && matchesRole;
     });
+
+    const handleResendWelcomeEmail = async (id) => {
+        try {
+            await resendWelcomeEmail(id);
+            showSuccess('Welcome email resent successfully!');
+        } catch (error) {
+            console.error('Error resending welcome email:', error);
+            const detailMsg = error.response?.data?.error || error.response?.data?.detail || error.message;
+            showError(detailMsg ? `Failed: ${detailMsg.substring(0, 100)}` : 'Failed to resend welcome email. Please try again.');
+        }
+    };
+
 
     // Get unique roles
     const uniqueRoles = [...new Set(employees.map(emp => emp.role).filter(Boolean))];
@@ -263,9 +265,7 @@ export default function AdminEmployeeManagement() {
                                         <tr className="bg-slate-100 border-b border-slate-200">
                                             <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Name</th>
                                             <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Email</th>
-                                            <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Employee ID</th>
                                             <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Role</th>
-                                            <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Password</th>
                                             <th className="px-6 py-4 text-left text-sm font-bold text-slate-900">Actions</th>
                                         </tr>
                                     </thead>
@@ -283,9 +283,6 @@ export default function AdminEmployeeManagement() {
                                                 <td className="px-6 py-4 text-sm text-slate-600">
                                                     {employee.email}
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-slate-600">
-                                                    {employee.employee_id}
-                                                </td>
                                                 <td className="px-6 py-4 text-sm">
                                                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                                                         employee.role === 'admin'
@@ -294,32 +291,6 @@ export default function AdminEmployeeManagement() {
                                                     }`}>
                                                         {employee.role}
                                                     </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm">
-                                                    <div className="flex items-center gap-2">
-                                                        <code className="bg-slate-100 px-3 py-1 rounded font-mono text-xs">
-                                                            {showPasswordMap[employee.id]
-                                                                ? employee.password || 'N/A'
-                                                                : '••••••••'
-                                                            }
-                                                        </code>
-                                                        <button
-                                                            onClick={() => togglePasswordVisibility(employee.id)}
-                                                            className="text-slate-500 hover:text-slate-700 transition-colors"
-                                                            title={showPasswordMap[employee.id] ? 'Hide' : 'Show'}
-                                                        >
-                                                            {showPasswordMap[employee.id] ? (
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-4.803m5.596-3.856a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM19.5 13a9.97 9.97 0 01-1.563 4.803m0 0c.726.745 1.409 1.574 2.036 2.428m0 0a10.05 10.05 0 01-23.708.464m0 0l1.414-1.414m0 0a3.375 3.375 0 105.732-4.244" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                </svg>
-                                                            )}
-                                                        </button>
-                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm">
                                                     <div className="flex gap-2">
@@ -340,6 +311,13 @@ export default function AdminEmployeeManagement() {
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                             </svg>
                                                             Delete
+                                                        </button>
+                                                        <button
+                                                        onClick ={() => handleResendWelcomeEmail(employee.id)}
+                                                        className="px-3 py-2 bg-green-50 text-green-600 font-semibold rounded-lg hover:bg-green-100 transition-colors text-sm flex items-center gap-2"
+                                                        >
+                                                        Resend Email
+
                                                         </button>
                                                     </div>
                                                 </td>
@@ -466,25 +444,11 @@ export default function AdminEmployeeManagement() {
                                         required
                                     >
                                         <option value="">Select a role</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="employee">Employee</option>
+                                        <option value="ADMIN">Admin</option>
+                                        <option value="STAFF">Staff</option>
+                                        <option value="MANAGER">Manager</option>
+                                        <option value="HR">Human Resource</option>
                                     </select>
-                                </div>
-
-                                {/* Password */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Password
-                                    </label>
-                                    <input
-                                        type="password"
-                                        name="password"
-                                        value={editFormData.password || ''}
-                                        onChange={handleEditFormChange}
-                                        placeholder="Leave empty to keep unchanged"
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-2">Leave empty to keep the current password</p>
                                 </div>
 
                                 {/* Buttons */}

@@ -1,41 +1,44 @@
 import { checkUserRole } from './authorize';
-// We only import from 'md' to guarantee they exist
-import { 
-    MdDashboard,
+import {
+    MdOutlineSpaceDashboard,
     MdHistory,
-    MdAssignmentAdd,
-    MdBarChart,
-    MdToday,
-    MdPersonAdd,
+    MdEventNote,
+    MdInsertChartOutlined,
+    MdCalendarToday,
+    MdPersonAddAlt1,
     MdSettings,
-    MdPeople,
-    MdBusiness
+    MdPeopleAlt,
+    MdDomain
 } from 'react-icons/md';
 
+// A single source of truth for all routes in the application
 export const ALL_MENU_ITEMS = [
+    // --- STAFF ROUTES ---
     {
         id: 'dashboard',
         label: 'Dashboard',
         path: '/dashboard',
         allowedRoles: ['staff'],
         description: 'View your dashboard and leave statistics',
-        navIcon: MdDashboard 
+        navIcon: MdOutlineSpaceDashboard
     },
     {
         id: 'my-requests',
-        label: 'My Requests',
+        label: 'My Requests (History)',
         path: '/my-requests',
         allowedRoles: ['staff'],
         description: 'View your leave request history',
-        navIcon: MdHistory 
+        navIcon: MdHistory
     },
+
+    // --- ADMIN ROUTES (Organized in order) ---
     {
         id: 'admin-dashboard',
         label: 'Dashboard',
         path: '/admin/dashboard',
         allowedRoles: ['admin'],
         description: 'Admin dashboard overview',
-        navIcon: MdDashboard
+        navIcon: MdOutlineSpaceDashboard
     },
     {
         id: 'admin-applications',
@@ -43,7 +46,7 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/applications',
         allowedRoles: ['admin'],
         description: 'Review and process leave applications',
-        navIcon: MdAssignmentAdd
+        navIcon: MdEventNote
     },
     {
         id: 'admin-employees',
@@ -51,7 +54,7 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/reports',
         allowedRoles: ['admin'],
         description: 'View employee reports',
-        navIcon: MdBarChart
+        navIcon: MdInsertChartOutlined
     },
     {
         id: 'admin-calendar',
@@ -59,7 +62,7 @@ export const ALL_MENU_ITEMS = [
         path: '/calendar',
         allowedRoles: ['admin', 'staff'],
         description: 'View the company leave calendar',
-        navIcon: MdToday
+        navIcon: MdCalendarToday
     },
     {
         id: 'admin-add-employee',
@@ -67,7 +70,7 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/add-employee',
         allowedRoles: ['admin'],
         description: 'Create a new employee account',
-        navIcon: MdPersonAdd
+        navIcon: MdPersonAddAlt1
     },
     {
         id: 'admin-leaves',
@@ -83,7 +86,7 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/manage/employees',
         allowedRoles: ['admin'],
         description: 'Manage employee accounts and roles',
-        navIcon: MdPeople
+        navIcon: MdPeopleAlt
     },
     {
         id: 'admin-branches',
@@ -91,15 +94,22 @@ export const ALL_MENU_ITEMS = [
         path: '/admin/branches',
         allowedRoles: ['admin'],
         description: 'Manage university branches',
-        navIcon: MdBusiness
+        navIcon: MdDomain
     }
+
 ];
 
+/**
+ * Returns only the menu items the current user is authorized to see.
+ */
 export const getAuthorizedMenuItems = (user) => {
     if (!user) return [];
     return ALL_MENU_ITEMS.filter(item => checkUserRole(user, item.allowedRoles));
 };
 
+/**
+ * Quick check to see if a path is accessible for the user to protect routes
+ */
 export const isPathAccessible = (path, user) => {
     const authorizedItems = getAuthorizedMenuItems(user);
     return authorizedItems.some(item => item.path === path);
