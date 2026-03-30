@@ -13,8 +13,10 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
 
   const [leavetypes, setLeavetypes] = useState([]);
   const [selectedTypeMaxDays, setSelectedTypeMaxDays] = useState(null);
+  const [selectedTypeMaxDuration, setSelectedTypeMaxDuration] = useState(null);
   const [daysRequested, setDaysRequested] = useState(0);
   const [exceedsLimit, setExceedsLimit] = useState(false);
+  const [exceedsDuration, setExceedsDuration] = useState(false);
   const [unpaidLeaveDays, setUnpaidLeaveDays] = useState(0);
   const [isLoadingtypes, setIsLoadingtypes] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,6 +76,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
           // Set initial max days and ID for first policy
           const initialPolicy = typesArray[0];
           setSelectedTypeMaxDays(initialPolicy.max_days);
+          setSelectedTypeMaxDuration(initialPolicy.max_duration || initialPolicy.max_days);
           setFormData(prev => ({
             ...prev,
             leaveTypeId: initialPolicy.id,
@@ -109,6 +112,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
           leaveTypeName: selectedType.name,
         }));
         setSelectedTypeMaxDays(selectedType.max_days);
+        setSelectedTypeMaxDuration(selectedType.max_duration || selectedType.max_days);
       }
     } else if (name === 'startDate' || name === 'endDate') {
       setFormData((prev) => ({
@@ -122,7 +126,14 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       const days = calculateDays(newStart, newEnd);
       setDaysRequested(days);
 
-      // Check if exceeds limit and calculate unpaid days
+      // Check if exceeds maximum duration per request
+      if (selectedTypeMaxDuration && days > selectedTypeMaxDuration) {
+        setExceedsDuration(true);
+      } else {
+        setExceedsDuration(false);
+      }
+
+      // Check if exceeds yearly limit and calculate unpaid days
       if (selectedTypeMaxDays && days > selectedTypeMaxDays) {
         setExceedsLimit(true);
         setUnpaidLeaveDays(days - selectedTypeMaxDays);
@@ -209,6 +220,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
       setDaysRequested(0);
       setUnpaidLeaveDays(0);
       setExceedsLimit(false);
+      setExceedsDuration(false);
 
       // Call parent callback to refresh history if provided
       if (typeof onSubmitSuccess === 'function') {
@@ -346,10 +358,11 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
                     <option key={type.id} value={type.id}>{type.name}</option>
                   ))}
                 </select>
-                {selectedTypeMaxDays && (
-                  <p className="text-xs text-slate-600 mt-2">
-                    Maximum allowed: <span className="font-semibold">{selectedTypeMaxDays} days/year</span>
-                  </p>
+                {selectedTypeMaxDays && selectedTypeMaxDuration && (
+                  <div className="text-xs text-slate-600 mt-2 space-y-1">
+                    <p>Yearly allocation: <span className="font-semibold">{selectedTypeMaxDays} days</span></p>
+                    <p>Max per request: <span className="font-semibold">{selectedTypeMaxDuration} days</span></p>
+                  </div>
                 )}
               </div>
 
@@ -383,19 +396,32 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
               {/* Days Summary */}
               {daysRequested > 0 && (
                 <div className={`p-2 sm:p-3 rounded-lg border-2 ${
-                  exceedsLimit
+                  exceedsDuration
                     ? 'bg-red-50 border-red-200'
+                    : exceedsLimit
+                    ? 'bg-amber-50 border-amber-200'
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <p className={`text-xs sm:text-sm font-semibold ${exceedsLimit ? 'text-red-700' : 'text-blue-700'}`}>
+                  <p className={`text-xs sm:text-sm font-semibold ${
+                    exceedsDuration
+                      ? 'text-red-700'
+                      : exceedsLimit
+                      ? 'text-amber-700'
+                      : 'text-blue-700'
+                  }`}>
                     {daysRequested} day{daysRequested !== 1 ? 's' : ''} requested
                   </p>
-                  {exceedsLimit && selectedTypeMaxDays && (
+                  {exceedsDuration && selectedTypeMaxDuration && (
                     <p className="text-xs text-red-600 mt-1">
-                      ⚠️ Exceeds limit of {selectedTypeMaxDays} days
+                      ❌ Exceeds maximum duration of {selectedTypeMaxDuration} days per request
                     </p>
                   )}
-                  {!exceedsLimit && selectedTypeMaxDays && (
+                  {!exceedsDuration && exceedsLimit && selectedTypeMaxDays && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Exceeds yearly limit of {selectedTypeMaxDays} days
+                    </p>
+                  )}
+                  {!exceedsDuration && !exceedsLimit && selectedTypeMaxDays && (
                     <p className="text-xs text-blue-600 mt-1">
                       ✓ {selectedTypeMaxDays - daysRequested} day{selectedTypeMaxDays - daysRequested !== 1 ? 's' : ''} remaining
                     </p>
@@ -465,7 +491,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
 
               <button
                 type="submit"
-                disabled={exceedsLimit || isLoadingtypes || isSubmitting}
+                disabled={unpaidLeaveDays > 0 || isLoadingtypes || isSubmitting}
                 className="w-full bg-slate-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg sm:rounded-xl transition-all shadow-lg text-sm sm:text-base min-h-[44px] flex items-center justify-center"
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Request'}

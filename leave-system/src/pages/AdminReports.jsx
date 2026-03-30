@@ -289,17 +289,26 @@ export default function AdminReports() {
                     <div className="p-8 bg-slate-50">
                       <h3 className="text-lg font-bold text-slate-900 mb-4">Paginated Leave History</h3>
                       <div className="space-y-3">
-                        {individualLeaves.map((l, idx) => (
-                          <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
-                            <div>
-                              <p className="font-bold text-slate-800">{l.leave_type_name || l.leave_type || 'Leave'}</p>
-                              <p className="text-xs text-slate-500">{l.start_date} to {l.end_date}</p>
-                            </div>
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${l.status?.toLowerCase() === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {l.status}
-                            </span>
-                          </div>
-                        ))}
+                      {individualLeaves.map((l, idx) => (
+  <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+          <p className="font-bold text-slate-800">{l.leave_type_name || l.leave_type || 'Leave'}</p>
+          
+          {/* 🚨 THE NEW UNPAID OVERFLOW BADGE */}
+          {l.extra_unpaid_days > 0 && (
+            <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full text-[10px] font-bold whitespace-nowrap">
+              {l.extra_unpaid_days} days extra: Unpaid
+            </span>
+          )}
+      </div>
+      <p className="text-xs text-slate-500 font-medium">{l.start_date} to {l.end_date}</p>
+    </div>
+    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${l.status?.toLowerCase() === 'approved' ? 'bg-green-100 text-green-700' : l.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+      {l.status}
+    </span>
+  </div>
+))}
                       </div>
 
                       {/* Pagination Controls */}
