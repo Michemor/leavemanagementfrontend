@@ -105,7 +105,7 @@ export default function AddEmployee() {
 
     createEmployee(employeeData)
       .then((response) => {
-          if (response.statusText === "Created") {
+          if (response.status === 200 || response.status === 201) {
             showSuccess( `Employee created successfully!`);
           
           // Reset form
