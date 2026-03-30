@@ -203,7 +203,7 @@ export default function AdminReports() {
           startY: finalY + 10,
           head: [['Employee', 'Leave Type', 'Start Date', 'End Date', 'Duration', 'Status']],
           body: leaves.map(l => [
-            l.employee || 'N/A',
+            l.first_name + ' ' + l.last_name || 'N/A',
             l.leave_type_name || l.leave_type || 'N/A',
             l.start_date || 'N/A',
             l.end_date || 'N/A',
