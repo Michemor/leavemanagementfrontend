@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/authhook';
 import { useAlert } from '../hooks/alerthook';
-import { getMyLeaves } from '../services/ApiClient';
+import { getMyLeaves, listLeaves } from '../services/ApiClient';
 import { getUserDisplayName, getUserEmail } from '../utils/userUtils';
 import ProtectedLayout from '../components/ProtectedLayout';
+import { getUserRole } from '../utils/authorize';
 
 export default function LeaveCalendar() {
   const location = useLocation();
@@ -15,26 +16,38 @@ export default function LeaveCalendar() {
   const [leaveEvents, setLeaveEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || getUserRole(user) === 'admin';
+
 // LeaveCalendar.jsx
   useEffect(() => {
     const fetchLeaveEvents = async () => {
       try {
         setIsLoading(true);
-        const res = await getMyLeaves();
-        const rawData = res.data; // Unpack the Axios payload
-
+        const res = isAdmin ? await listLeaves() : await getMyLeaves();
+        const rawData = res.data; 
         if (rawData) {
           // Handle both array and paginated response formats
           const leaveData = Array.isArray(rawData) ? rawData : rawData.results || [];
           
           // Map events including the hydrated leave_type_name
-          const events = leaveData.map(leave => ({
+          const events = leaveData
+          .filter(leave => (leave.status || "").toLowerCase() !== 'rejected')
+          .map(leave => {
+            const basetype = leave.leave_type_name || leave.leave_type || leave.type || 'Leave';
+
+            let empName = 'Unknown';
+            if (leave.employee) {
+              empName = leave.employee_name
+            } 
+            return {
             date: leave.start_date,
             endDate: leave.end_date,
-            type: leave.leave_type_name || leave.leave_type || leave.type || 'Leave',
+            type: basetype,
+            empName: isAdmin ? empName : null,
             title: leave.reason || '',
             status: leave.status || 'pending',
-          }));
+            }
+          });
           
           setLeaveEvents(events);
         } else {
@@ -48,7 +61,7 @@ export default function LeaveCalendar() {
     };
 
     fetchLeaveEvents();
-  }, [showError]); // Keep dependencies clean
+  }, [showError, isAdmin]); // Keep dependencies clean
 
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -80,7 +93,9 @@ export default function LeaveCalendar() {
     return leaveEvents.filter(event => {
       if (!event.date || !event.endDate) return false;
 
-      const [sYear, sMonth, sDay] = event.date.split('-').map(Number);
+      const safeStartDate = event.date.split('T')[0];
+
+      const [sYear, sMonth, sDay] = safeStartDate.split('-').map(Number);
       const start = new Date(sYear, sMonth - 1, sDay);
       start.setHours(0, 0, 0, 0);
 
@@ -102,7 +117,6 @@ export default function LeaveCalendar() {
   const getLeaveColor = (status) => {
     const statusLower = String(status || 'pending').toLowerCase();
     if (statusLower === 'approved') return 'bg-green-100 border-green-400';
-    if (statusLower === 'rejected') return 'bg-red-100 border-red-400';
     if (statusLower === 'pending') return 'bg-yellow-100 border-yellow-400';
     return 'bg-slate-100 border-slate-400';
   };
@@ -110,11 +124,9 @@ export default function LeaveCalendar() {
   const getLeaveStatusBadgeColor = (status) => {
     const statusLower = String(status || 'pending').toLowerCase();
     if (statusLower === 'approved') return 'bg-green-500';
-    if (statusLower === 'rejected') return 'bg-red-500';
     if (statusLower === 'pending') return 'bg-yellow-500';
     return 'bg-slate-500';
   };
-
   return (
     <ProtectedLayout currentPath={location.pathname}>
       <div className="min-h-screen bg-slate-50 p-6 sm:p-8">
@@ -130,7 +142,7 @@ export default function LeaveCalendar() {
                   </svg>
                   Back to Dashboard
               </button>
-              <h1 className="text-4xl font-black text-slate-900 mb-2">{`${getUserDisplayName()}'s Leave Calendar`}</h1>
+              <h1 className="text-4xl font-black text-slate-900 mb-2">{`${getUserDisplayName(user)}'s Leave Calendar`}</h1>
               <p className="text-slate-600">View your approved and pending leave dates</p>
           </div>
 
@@ -143,7 +155,7 @@ export default function LeaveCalendar() {
           {/* User Info */}
           <div className="mb-6 pb-6 border-b border-slate-200">
             <p className="text-sm text-slate-600">
-              Viewing leave calendar for: <span className="font-semibold text-slate-900">{getUserDisplayName()}</span>
+              Viewing leave calendar for: <span className="font-semibold text-slate-900">{getUserDisplayName(user)}</span>
             </p>
             <p className="text-xs text-slate-500 mt-1">{getUserEmail(user)}</p>
           </div>
@@ -221,10 +233,6 @@ export default function LeaveCalendar() {
               <div className="w-4 h-4 bg-yellow-500 rounded"></div>
               <span className="text-sm text-slate-600">Pending</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 bg-red-500 rounded"></div>
-              <span className="text-sm text-slate-600">Rejected</span>
-            </div>
           </div>
 
           <h3 className="font-bold text-slate-900 mb-3">Your Leave Events</h3>
@@ -238,6 +246,9 @@ export default function LeaveCalendar() {
                   <div className="flex-1">
                     <div className="font-medium text-slate-900">
                       {event.type} - {safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1)}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      {event.empName ? `Employee: ${event.empName}` : `${getUserDisplayName(user)}`}
                     </div>
                     <div className="text-xs text-slate-600">
                       {formatDateRange(event.date, event.endDate)}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getReports, getEmployees, listLeaves, getDepartmentReports } from '../services/ApiClient';
+import { getReports, getEmployees, listLeaves, getDepartmentReports, getEmployeeLeaveSummary } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
+import { LeaveSummaryCard } from '../components/LeaveSummaryCard';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -23,6 +24,10 @@ export default function AdminReports() {
   const [individualLeaves, setIndividualLeaves] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
+  const [individualEmployeeSummary, setIndividualEmployeeSummary] = useState(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+
+  const [isExporting, setIsExporting] = useState(false);
 
   const [reports, setReports] = useState({
     totalApplications: 0,
@@ -106,21 +111,30 @@ export default function AdminReports() {
     try {
       console.log(`Fetching leaves for employee ${employeeId} - Page ${pageNum}`);
       // Passes employee_id and page to utilize backend optimization
-      const res = await listLeaves({ employee_id: employeeId, page: pageNum });
+      const res = await listLeaves({ employee: employeeId, page: pageNum });
       console.log('Paginated leaves response:', res);
       const rawData = res.data;
       console.log('Individual leaves data:', rawData);
 
+      let leavesArray = [];
+      let hasNextPage = false;
+
       if (rawData.results) {
-        setIndividualLeaves(rawData.results);
-        setHasNext(!!rawData.next);
-      } else {
-        setIndividualLeaves(Array.isArray(rawData) ? rawData : []);
-        setHasNext(false);
+        leavesArray = rawData.results;
+        hasNextPage = !!rawData.next;
+      } else if (Array.isArray(rawData)) {
+        leavesArray = rawData;
+        hasNextPage = false;
       }
+
+      console.log('Processed leaves array:', leavesArray);
+      setIndividualLeaves(leavesArray);
+      setHasNext(hasNextPage);
       setCurrentPage(pageNum);
     } catch (error) {
       console.error('Failed to load employee leaves', error);
+      setIndividualLeaves([]);
+      setHasNext(false);
     }
   };
 
@@ -128,59 +142,104 @@ export default function AdminReports() {
     setSelectedEmployee(emp);
     setEmployeeSearch('');
     setSearchResults([]);
+    setIndividualLeaves([]); // Reset leaves
+    setIndividualEmployeeSummary(null); // Reset summary
+    setCurrentPage(1); // Reset pagination
     fetchIndividualLeaves(emp.id, 1);
+    // Fetch leave summary for selected employee
+    fetchEmployeeLeaveSummary(emp.id);
   };
 
-  const downloadPDFReport = () => {
+  // Fetch Employee Leave Summary
+  const fetchEmployeeLeaveSummary = async (employeeId) => {
+    try {
+      setIsSummaryLoading(true);
+      console.log(`Fetching leave summary for employee ${employeeId}`);
+      // Fetch all leaves to calculate summary by leave type
+      const res = await getEmployeeLeaveSummary(employeeId);
+      console.log('Employee leave summary response:', res);
+      const summary = res.data;
+      
+      setIndividualEmployeeSummary(summary);
+      console.log('Calculated employee leave summary:', summary);
+    } catch (error) {
+      console.error('Failed to load employee leave summary', error);
+      setIndividualEmployeeSummary([]);
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+const downloadPDFReport = () => {
     if (!reports.report_data) return;
 
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-    const timestamp = new Date().toLocaleString();
+    setIsExporting(true);
 
-    doc.setFontSize(22);
-    doc.text("Team Impact University: Leave Report", 14, 22);
-    doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text(`Generated on: ${timestamp}`, 14, 32);
+    // Yield main thread so the UI doesn't freeze
+    setTimeout(() => {
+      try {
+        const timestamp = new Date().toLocaleString();
 
-    let finalY = 40;
+        // 1. Loop through each institution
+        Object.entries(reports.report_data).forEach(([inst, depts]) => {
+          
+          const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+          });
 
-    // 1. Institutions
-    Object.entries(reports.report_data).forEach(([inst, depts]) => {
-      doc.setFontSize(16);
-      doc.setTextColor(50, 100, 200);
-      doc.text(inst, 14, finalY);
-      finalY += 8;
+          // Add Headers for this specific Institution
+          doc.setFontSize(22);
+          doc.text(`${inst}: Leave Report`, 14, 22);
+          doc.setFontSize(12);
+          doc.setTextColor(100);
+          doc.text(`Generated on: ${timestamp}`, 14, 32);
 
-      // 2. DEPARTMENT LOOP
+          let finalY = 40;
 
-      Object.entries(depts).forEach(([dept, leaves]) => {
-        doc.setFontSize(14);
-        doc.text(`Department: ${dept}`, 20, finalY + 5);
+          // 2. Department Loop
+          Object.entries(depts).forEach(([dept, leaves]) => {
+            
+            // Page break safety check
+            if (finalY > 250) {
+              doc.addPage();
+              finalY = 20;
+            }
 
-        autoTable(doc, {
-          startY: finalY + 10,
-          head: [['Employee', 'Leave Type', 'Start Date', 'End Date', 'Duration', 'Status']],
-          body: leaves.map(l => [
-            l.employee || 'N/A',
-            l.leave_type_name || l.leave_type || 'N/A',
-            l.start_date || 'N/A',
-            l.end_date || 'N/A',
-            l.duration ? `${l.duration} days` : 'N/A',
-            l.status || 'N/A'
-          ]),
-          theme: 'grid',
-          headStyles: { fillColor: [50, 100, 200] },
-        })
-        finalY = doc.lastAutoTable.finalY + 10;
-      })
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Department: ${dept}`, 20, finalY + 5);
 
-      doc.save(`Leave_Report_${inst.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-    });
+            autoTable(doc, {
+              startY: finalY + 10,
+              head: [['Employee', 'Leave Type', 'Start Date', 'End Date', 'Duration', 'Status']],
+              body: leaves.map(l => [
+                l.employee || 'N/A',
+                l.leave_type_name || l.leave_type || 'N/A',
+                l.start_date || 'N/A',
+                l.end_date || 'N/A',
+                l.duration ? `${l.duration} days` : 'N/A',
+                l.status || 'N/A'
+              ]),
+              theme: 'grid',
+              headStyles: { fillColor: [50, 100, 200] },
+            });
+            
+            finalY = doc.lastAutoTable.finalY + 10;
+          });
+
+          // 3. Save this institution's specific PDF
+          const safeInstName = inst.replace(/\s+/g, '_');
+          doc.save(`Leave_Report_${safeInstName}_${new Date().toISOString().slice(0,10)}.pdf`);
+        });
+
+      } catch (error) {
+        console.error("Failed to generate PDFs:", error);
+      } finally {
+        // Turn off loading state after all files have downloaded
+        setIsExporting(false);
+      }
+    }, 100);
   };
 
   return (
@@ -244,16 +303,28 @@ export default function AdminReports() {
                 )}
               </div>
             )}
-
+      
             <div className="flex gap-2 ml-auto">
                 <button 
                   onClick={() => downloadPDFReport()} 
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-lg transition-colors shadow-sm flex items-center gap-2"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Export Full PDF Report
+                 {isExporting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Generating PDF...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export Full PDF Report
+                    </>
+                  )}
                 </button>     
                 </div>
           </div>
@@ -289,45 +360,37 @@ export default function AdminReports() {
                     <div className="p-8 bg-slate-50">
                       <h3 className="text-lg font-bold text-slate-900 mb-4">Paginated Leave History</h3>
                       <div className="space-y-3">
-                      {individualLeaves.map((l, idx) => (
-  <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
-    <div>
-      <div className="flex items-center gap-2 mb-1">
-          <p className="font-bold text-slate-800">{l.leave_type_name || l.leave_type || 'Leave'}</p>
-          
-          {/* 🚨 THE NEW UNPAID OVERFLOW BADGE */}
-          {l.extra_unpaid_days > 0 && (
-            <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full text-[10px] font-bold whitespace-nowrap">
-              {l.extra_unpaid_days} days extra: Unpaid
-            </span>
-          )}
-      </div>
-      <p className="text-xs text-slate-500 font-medium">{l.start_date} to {l.end_date}</p>
-    </div>
-    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${l.status?.toLowerCase() === 'approved' ? 'bg-green-100 text-green-700' : l.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-      {l.status}
-    </span>
-  </div>
-))}
+                        {individualLeaves.map((l, idx) => (
+                          <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
+                            <div>
+                              <p className="font-bold text-slate-800">{l.leave_type_name || l.leave_type || 'Leave'}</p>
+                              <p className="text-xs text-slate-500">{l.start_date} to {l.end_date}</p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${l.status?.toLowerCase() === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {l.status}
+                            </span>
+                          </div>
+                        ))}
                       </div>
 
-                      {/* Pagination Controls */}
-                      <div className="flex gap-2 mt-6 justify-center">
-                        <button 
-                            disabled={currentPage === 1}
-                            onClick={() => fetchIndividualLeaves(selectedEmployee.id, currentPage - 1)}
-                            className="px-4 py-2 bg-white border border-slate-300 rounded text-sm font-bold disabled:opacity-50"
-                        >
-                            Previous
-                        </button>
-                        <span className="px-4 py-2 text-sm font-bold text-slate-500">Page {currentPage}</span>
-                        <button 
-                            disabled={!hasNext}
-                            onClick={() => fetchIndividualLeaves(selectedEmployee.id, currentPage + 1)}
-                            className="px-4 py-2 bg-white border border-slate-300 rounded text-sm font-bold disabled:opacity-50"
-                        >
-                            Next
-                        </button>
+                        {/* Pagination Controls */}
+                        <div className="flex gap-2 mt-6 justify-center">
+                          <button 
+                              disabled={currentPage === 1}
+                              onClick={() => fetchIndividualLeaves(selectedEmployee.id, currentPage - 1)}
+                              className="px-4 py-2 bg-white border border-slate-300 rounded text-sm font-bold disabled:opacity-50 hover:bg-slate-50"
+                          >
+                              Previous
+                          </button>
+                          <span className="px-4 py-2 text-sm font-bold text-slate-500">Page {currentPage}</span>
+                          <button 
+                              disabled={!hasNext}
+                              onClick={() => fetchIndividualLeaves(selectedEmployee.id, currentPage + 1)}
+                              className="px-4 py-2 bg-white border border-slate-300 rounded text-sm font-bold disabled:opacity-50 hover:bg-slate-50"
+                          >
+                              Next
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -336,14 +399,17 @@ export default function AdminReports() {
                     <p className="text-slate-400 text-xl font-medium">Search and select an employee above.</p>
                   </div>
                 )
+                  )}
+    
+                </div>
               )}
-
             </div>
-          )}
-        </div>
-      </div>
-    </ProtectedLayout>
-  )}
+          </div>
+        </ProtectedLayout>
+      );
+    }
+  );
+}
 
 function StatCard({ label, value, color = "text-slate-900" }) {
   return (

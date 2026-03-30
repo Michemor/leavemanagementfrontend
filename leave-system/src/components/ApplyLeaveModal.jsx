@@ -5,6 +5,7 @@ import { applyLeave, getLeaveTypes } from '../services/ApiClient';
 export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
   const [formData, setFormData] = useState({
     leaveTypeName: '',
+    allowedMonth: '',
     startDate: '',
     endDate: '',
     reason: '',
@@ -81,6 +82,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
             ...prev,
             leaveTypeId: initialPolicy.id,
             leaveTypeName: initialPolicy.name,
+            allowedMonth: initialPolicy.allowed_month,
           }));
         } else {
           throw new Error('API returned empty types list');
@@ -110,6 +112,7 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
           ...prev,
           leaveTypeId: selectedType.id,
           leaveTypeName: selectedType.name,
+          allowedMonth: selectedType.allowed_month,
         }));
         setSelectedTypeMaxDays(selectedType.max_days);
         setSelectedTypeMaxDuration(selectedType.max_duration || selectedType.max_days);
@@ -185,6 +188,18 @@ export default function ApplyLeaveModal({ isOpen, onClose, onSubmitSuccess }) {
     if (requiresDocument(leaveTypeName) && !formData.document) {
       showWarning(`Please upload a ${getDocumentLabel(leaveTypeName).toLowerCase()} for ${leaveTypeName}`);
       return;
+    }
+
+   // Check dynamic allowed_month rule
+    if (formData.allowedMonth) {
+      const startMonth = new Date(formData.startDate).getMonth() + 1;
+      const endMonth = new Date(formData.endDate).getMonth() + 1;
+      
+      if (startMonth !== formData.allowedMonth || endMonth !== formData.allowedMonth) {
+        const monthName = new Date(2000, formData.allowedMonth - 1, 1).toLocaleString('default', { month: 'long' });
+        showError(`${formData.leaveTypeName} can only be taken strictly within the month of ${monthName}.`);
+        return;
+      }
     }
 
     try {

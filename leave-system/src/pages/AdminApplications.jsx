@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAlert } from '../hooks/alerthook';
-import { getPendingLeaves, partialUpdateLeave } from '../services/ApiClient';
+import { getPendingLeaves, updateEmployee, getLeaveType, updateLeaveStatus } from '../services/ApiClient';
 import ProtectedLayout from '../components/ProtectedLayout';
 
 export default function AdminApplications() {
@@ -31,12 +31,53 @@ export default function AdminApplications() {
     return typeMap[leaveType] || leaveType || 'Leave';
   };
 
+  // Calculate days between two dates (inclusive)
+  const calculateDaysDifference = (startDate, endDate) => {
+    if (!startDate || !endDate) return 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    let weekdayCount = 0;
+    const currentDate = new Date(start);
+    
+    // Loop through each day from start to end date (inclusive)
+    while (currentDate <= end) {
+      const dayOfWeek = currentDate.getDay();
+      // 0 = Sunday, 6 = Saturday; exclude both
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        weekdayCount++;
+      }
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return Math.max(0, weekdayCount);
+  };
+
   const fetchPendingApplications = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await getPendingLeaves();
       const data = res.data;
+      console.log("Fetched pending applications data:\n", data);
       const leaveData = Array.isArray(data) ? data : data.results || [];
+
+      // Get unique leave type codes
+      const uniqueLeaveTypes = [...new Set(leaveData.map(item => item.leave_type).filter(Boolean))];
+      
+      // Fetch max_days for each leave type
+      const leaveTypeDetails = {};
+      await Promise.all(
+        uniqueLeaveTypes.map(async (typeCode) => {
+          try {
+            const typeRes = await getLeaveType(typeCode);
+            leaveTypeDetails[typeCode] = typeRes.data.max_days || 'N/A';
+          } catch (err) {
+            console.warn(`Failed to fetch details for leave type ${typeCode}:`, err);
+            leaveTypeDetails[typeCode] = 'N/A';
+          }
+        })
+      );
 
       const transformedData = leaveData.map((item) => {
         return {
@@ -47,10 +88,14 @@ export default function AdminApplications() {
           employeeDepartment: item.department || item.employee?.department || 'General',
           employeeInstitution: item.institution_name || 'Main Branch',
           type: formatLeaveType(item.leave_type_name || item.leave_type),
+          leaveTypeCode: item.leave_type || 'N/A',
+          maxDays: leaveTypeDetails[item.leave_type] || 'N/A',
           start: item.start_date || '',
           end: item.end_date || '',
           reason: item.reason || 'No reason provided',
           submittedDate: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A',
+          extra_unpaid_days: item.extra_unpaid_days || 0,
+          leave_duration: item.leave_duration || 0
         };
       });
 
@@ -67,17 +112,6 @@ export default function AdminApplications() {
     fetchPendingApplications();
   }, [fetchPendingApplications]);
 
-  const calculateDays = (startDate, endDate) => {
-    if (!startDate || !endDate) return 'N/A';
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-      return days > 0 ? `${days} day${days > 1 ? 's' : ''}` : '1 day';
-    } catch {
-      return 'N/A';
-    }
-  };
 
   // 2. Open Review Dialog
   const openReviewModal = (app, type) => {
@@ -106,7 +140,7 @@ export default function AdminApplications() {
       };
 
       // Assuming updateLeave uses PUT or PATCH. 
-      await partialUpdateLeave(reviewModal.app.id, payload);
+      await updateLeaveStatus(reviewModal.app.id, payload);
       
       showSuccess(`Leave ${reviewModal.actionType.toLowerCase()} successfully!`);
       
@@ -116,6 +150,16 @@ export default function AdminApplications() {
     } catch (error) {
       console.error('Error updating leave:', error);
       showError('Failed to process application. Please try again.');
+    }
+  };
+
+  const fetchLeaveTypeDetails = async (leaveTypeCode) => {
+    try {
+      const res = await getLeaveType(leaveTypeCode);
+      return res.data;
+    } catch (error) {
+      console.error('Error fetching leave type details:', error);
+      return null;
     }
   };
 
@@ -172,7 +216,8 @@ export default function AdminApplications() {
                             <p className="text-[10px] text-slate-500 mt-1 truncate max-w-[150px]">"{app.reason}"</p>
                         </td>
                         <td className="px-6 py-4 text-sm font-bold text-blue-600">
-                            {calculateDays(app.start, app.end)}
+                            {app.leave_duration}
+                            <p className="text-[10px] mt-1 text-orange-500"> Unpaid Days : {app.extra_unpaid_days}</p>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2 justify-center">
@@ -215,6 +260,19 @@ export default function AdminApplications() {
                     </span>
                 </div>
 
+                <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Leave Type</p>
+                            <p className="text-sm font-bold text-slate-900">{reviewModal.app.type}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Max Days Allowed</p>
+                            <p className="text-sm font-bold text-blue-600">{reviewModal.app.maxDays} days</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
@@ -235,6 +293,23 @@ export default function AdminApplications() {
                         />
                     </div>
                 </div>
+
+                {(() => {
+                  const originalDays = calculateDaysDifference(reviewModal.app.start, reviewModal.app.end);
+                  const newDays = calculateDaysDifference(reviewModal.startDate, reviewModal.endDate);
+                  const addedDays = newDays - originalDays;
+                  
+                  return addedDays > 0 ? (
+                    <div className="mb-4 p-3 bg-orange-50 border-l-4 border-orange-500 rounded">
+                      <p className="text-sm font-bold text-orange-700">
+                        Adding unpaid days: {addedDays}
+                      </p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Original: {originalDays} days → Modified: {newDays} days
+                      </p>
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="mb-6">
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Admin Remarks (Optional)</label>
